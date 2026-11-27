@@ -43,12 +43,13 @@
   function tudo() {
     const e = emp(), s = setor();
     estado.sel = { emp: e.id, set: s.id };
-    if (!s.data) s.data = hoje();
+    s.data = hoje();
     opcoes($('emp'), estado.empresas.map(x => [x.id, x.nome]), e.id);
     opcoes($('set'), e.setores.map(x => [x.id, x.nome]), s.id);
     const cats = [...new Set(s.itens.map(i => localDe(i.cat)).filter(Boolean))].sort();
     opcoes($('cat'), [['', 'Local de estoque'], ...cats.map(c => [c, c])], cats.includes($('cat').value) ? $('cat').value : '');
-    $('data').value = s.data; $('resp').value = s.resp; $('cego').checked = s.cego;
+    $('cego').checked = s.cego;
+    cabecalho();
     if (s.cego && $('filtro').value === 'div') $('filtro').value = '';
     $('filtro').querySelector('[value=div]').disabled = s.cego;
     lista();
@@ -98,7 +99,9 @@
       if (!inp.value.trim()) return true;
       const v = C.numsContagem(inp.value);
       if (!v) { inp.setCustomValidity('Use só números'); inp.reportValidity(); inp.select(); return false; }
-      s.cont[it.id] = (s.cont[it.id] || []).concat(v); inp.value = ''; salvar(); pintar(); status(); return true;
+      s.cont[it.id] = (s.cont[it.id] || []).concat(v); inp.value = '';
+      const nomes = s.resp ? s.resp.split(', ') : [];
+      if (estado.usuario && !nomes.includes(estado.usuario)) s.resp = nomes.concat(estado.usuario).join(', '); salvar(); pintar(); status(); return true;
     }
     inp.addEventListener('input', () => inp.setCustomValidity(''));
     inp.addEventListener('keydown', e => {
@@ -135,8 +138,42 @@
   document.querySelectorAll('[data-fechar]').forEach(b => b.onclick = () => b.closest('dialog').close());
   $('emp').onchange = () => { estado.sel = { emp: $('emp').value, set: '' }; salvar(); tudo(); salvar(); };
   $('set').onchange = () => { estado.sel.set = $('set').value; tudo(); salvar(); };
-  $('data').onchange = () => { setor().data = $('data').value; salvar(); };
-  $('resp').oninput = () => { setor().resp = $('resp').value; salvar(); };
+
+  /* Identificação de quem conta (sem senha) e data automática. */
+  const SESSAO = KEY + '-sessao';
+  const identificado = () => { try { return sessionStorage.getItem(SESSAO) === hoje() && !!estado.usuario; } catch (e) { return false; } };
+  function cabecalho() {
+    setor().data = hoje();
+    $('data').textContent = hoje().split('-').reverse().join('/');
+    $('resp').textContent = estado.usuario || '—';
+  }
+  function pedirUsuario() {
+    if ($('dUser').open) return;
+    $('uNome').value = '';
+    $('uCancelar').hidden = !identificado();
+    $('uLista').replaceChildren(...(estado.usuarios || []).map(n => { const b = el('button', '', n); b.type = 'button'; b.onclick = () => entrar(n); return b; }));
+    $('dUser').showModal();
+  }
+  function entrar(nome) {
+    nome = nome.replace(/\s+/g, ' ').trim();
+    if (!nome) return;
+    estado.usuarios = estado.usuarios || [];
+    const existe = estado.usuarios.find(n => C.norm(n) === C.norm(nome));
+    if (!existe) estado.usuarios.push(nome);
+    estado.usuario = existe || nome;
+    try { sessionStorage.setItem(SESSAO, hoje()); } catch (e) { /* pergunta de novo depois */ }
+    salvar(); cabecalho(); $('dUser').close();
+  }
+  $('uForm').onsubmit = e => { e.preventDefault(); entrar($('uNome').value); };
+  $('uCancelar').onclick = () => $('dUser').close();
+  $('dUser').addEventListener('cancel', e => { if (!identificado()) e.preventDefault(); });
+  $('dUser').addEventListener('close', () => { if (!identificado()) setTimeout(pedirUsuario); });
+  $('bTrocar').onclick = pedirUsuario;
+  /* App deixado aberto de um dia para o outro: atualiza a data e pede o nome. */
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { cabecalho(); if (!identificado()) pedirUsuario(); } });
+
+  /* O relatório leva quem contou o setor; se ninguém contou ainda, quem está usando. */
+  const paraRelatorio = () => { const s = setor(); s.data = hoje(); return Object.assign({}, s, { resp: s.resp || estado.usuario || '' }); };
   $('cego').onchange = () => { setor().cego = $('cego').checked; salvar(); tudo(); };
   $('q').oninput = $('cat').onchange = $('filtro').onchange = lista;
 
@@ -199,7 +236,7 @@
   };
 
   /* Relatório */
-  const textoRel = () => { $('relX').value = C.relatorio(emp().nome, setor(), $('relD').checked); };
+  const textoRel = () => { $('relX').value = C.relatorio(emp().nome, paraRelatorio(), $('relD').checked); };
   $('bRel').onclick = () => { textoRel(); $('dRel').showModal(); };
   $('relD').onchange = textoRel;
   $('relC').onclick = async () => {
@@ -214,7 +251,7 @@
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
   const arquivo = t => C.norm(t).replace(/[^a-z0-9]+/g, '-');
-  $('relV').onclick = () => baixar('conferencia_' + arquivo(emp().nome) + '_' + arquivo(setor().nome) + '_' + setor().data + '.csv', '﻿' + C.csv(emp().nome, setor()), 'text/csv');
+  $('relV').onclick = () => baixar('conferencia_' + arquivo(emp().nome) + '_' + arquivo(setor().nome) + '_' + setor().data + '.csv', '﻿' + C.csv(emp().nome, paraRelatorio()), 'text/csv');
 
   /* Opções */
   const fechar = () => $('dMenu').close();
@@ -235,20 +272,20 @@
   };
   $('mNova').onclick = () => {
     if (!confirm('Zerar contagens, saldo e observações de “' + setor().nome + '”?')) return;
-    const s = setor(); s.cont = {}; s.sys = {}; s.obs = {}; s.data = hoje(); mudou();
+    const s = setor(); s.cont = {}; s.sys = {}; s.obs = {}; s.resp = ''; s.data = hoje(); mudou();
   };
   $('mZerar').onclick = () => {
     const e = emp();
     if (!confirm('Zerar saldos, contagens e observações de TODAS as famílias de “' + e.nome + '”?')) return;
     baixar('backup_antes_de_zerar_' + hoje() + '.json', C.backup(estado), 'application/json');
-    for (const s of e.setores) { s.cont = {}; s.sys = {}; s.obs = {}; s.data = hoje(); }
+    for (const s of e.setores) { s.cont = {}; s.sys = {}; s.obs = {}; s.resp = ''; s.data = hoje(); }
     $('filtro').value = '';
     mudou();
   };
   $('mLimpar').onclick = () => {
     const s = setor();
     if (!confirm('Excluir TODOS os ' + s.itens.length + ' itens de “' + emp().nome + ' / ' + s.nome + '”, com contagens e saldos?')) return;
-    s.itens = []; s.cont = {}; s.sys = {}; s.obs = {}; mudou();
+    s.itens = []; s.cont = {}; s.sys = {}; s.obs = {}; s.resp = ''; mudou();
   };
   $('mBk').onclick = () => baixar('backup_conferencia_' + hoje() + '.json', C.backup(estado), 'application/json');
   $('mRs').onclick = () => { $('mFile').value = ''; $('mFile').click(); };
@@ -262,6 +299,7 @@
   };
 
   tudo(); salvar();
+  if (!identificado()) pedirUsuario();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(() => aviso('O modo sem internet não foi ativado. Abra de novo com internet.'));
   }

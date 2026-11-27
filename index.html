@@ -23,6 +23,9 @@ header label input[type=checkbox]{min-height:0;width:22px;height:22px}
 header select{flex:1;min-width:150px;width:0}
 #q{flex:2;min-width:180px}
 #stat{font-weight:600;font-size:14px}
+.quem{font-size:14px}
+.nomes{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+#uNome{width:100%}
 #aviso{display:none;background:var(--falta);color:#fff;padding:8px 12px;font-weight:600}
 main{max-width:1000px;margin:0 auto;padding:10px 12px 40px}
 h2{font-size:14px;text-transform:uppercase;color:var(--mut);margin:18px 0 8px}
@@ -62,8 +65,9 @@ dialog .row{margin:8px 0 0}
     <button id="bMenu">⚙ Opções</button>
   </div>
   <div class="row">
-    <label>Data <input type="date" id="data"></label>
-    <input id="resp" placeholder="Responsável" autocomplete="off">
+    <span class="quem">Data: <b id="data"></b></span>
+    <span class="quem">Responsável: <b id="resp"></b></span>
+    <button id="bTrocar">Trocar</button>
     <label><input type="checkbox" id="cego"> Contagem cega</label>
   </div>
   <div class="row">
@@ -81,6 +85,16 @@ dialog .row{margin:8px 0 0}
   </div>
 </header>
 <main id="lista"></main>
+
+<dialog id="dUser">
+  <form id="uForm">
+    <h3>Quem vai fazer a contagem?</h3>
+    <div class="nomes" id="uLista"></div>
+    <p>Primeiro acesso? Digite o seu nome para cadastrar.</p>
+    <input id="uNome" placeholder="Nome e sobrenome" autocomplete="off" maxlength="60">
+    <div class="row"><button class="p" type="submit">Entrar</button><button type="button" id="uCancelar">Cancelar</button></div>
+  </form>
+</dialog>
 
 <dialog id="dImp">
   <h3 id="impT"></h3>
