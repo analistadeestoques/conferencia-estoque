@@ -116,8 +116,9 @@
     const h = linhasPlan.findIndex(l => l.some(c => norm(c) === 'codigo do produto'));
     if (h < 0) throw new Error('Não achei a coluna “Código do Produto”.');
     const cab = linhasPlan[h].map(norm);
-    const col = nome => { const i = cab.findIndex(c => c.startsWith(nome)); if (i < 0) throw new Error('Falta a coluna “' + nome + '” na exportação.'); return i; };
-    const c = { cod: col('codigo do produto'), nome: col('descricao do produto'), un: col('unidade'), qtd: col('quantidade'), fam: col('familia'), emp: col('minha empresa'), local: col('local de estoque') };
+    const achaCol = nome => cab.findIndex(c => c.startsWith(nome));
+    const col = nome => { const i = achaCol(nome); if (i < 0) throw new Error('Falta a coluna “' + nome + '” na exportação.'); return i; };
+    const c = { cod: col('codigo do produto'), nome: col('descricao do produto'), un: achaCol('unidade'), qtd: col('quantidade'), fam: col('familia'), emp: achaCol('minha empresa'), local: col('local de estoque') };
     const mapa = new Map();
     for (const l of linhasPlan.slice(h + 1)) {
       const t = i => String(l[i] === undefined ? '' : l[i]).trim();
@@ -125,16 +126,38 @@
       if (!t(c.cod) || !t(c.nome) || q === null) continue;
       const empresa = t(c.emp).toUpperCase(), familia = t(c.fam).toUpperCase();
       const r = { cod: t(c.cod), nome: t(c.nome), un: t(c.un), q: arred(q), setor: FAMILIAS[familia] || inicial(familia || 'Sem família'),
-        cat: (EMPRESAS[empresa] || t(c.emp)) + ' - ' + inicial(t(c.local)) };
-      const k = r.cat + '|' + chaveCod(r.cod);
+        local: inicial(t(c.local)), cat: empresa ? (EMPRESAS[empresa] || t(c.emp)) + ' - ' + inicial(t(c.local)) : '' };
+      const k = (r.cat || r.local) + '|' + chaveCod(r.cod);
       if (mapa.has(k)) mapa.get(k).q = arred(mapa.get(k).q + r.q); else mapa.set(k, r);
     }
     if (!mapa.size) throw new Error('Nenhum item encontrado na planilha.');
     return [...mapa.values()];
   }
 
+  /* Sem a coluna "Minha Empresa", descobre a empresa pelos itens já cadastrados.
+     Na dúvida não atribui: o mesmo código pode ser outro produto na outra empresa. */
+  function descobrirEmpresa(empresa, r) {
+    const doLocal = [];
+    for (const s of empresa.setores) for (const it of s.itens) {
+      const cat = [it.cat, s.nome].find(x => x && x.endsWith(' - ' + r.local));
+      if (cat) doLocal.push({ it, cat, familia: cat === it.cat ? s.nome : it.cat });
+    }
+    const cod = doLocal.filter(x => chaveCod(x.it.cod) === chaveCod(r.cod));
+    const nome = x => norm(x.it.nome) === norm(r.nome);
+    let c = cod.filter(nome);
+    if (!c.length) c = doLocal.filter(nome);
+    if (!c.length) c = cod.filter(x => x.familia === r.setor);
+    return c.length === 1 ? c[0].cat : '';
+  }
+
   function importarPosicao(empresa, linhasPlan) {
-    const regs = lerPosicao(linhasPlan);
+    const naoIdentificados = [];
+    const regs = lerPosicao(linhasPlan).filter(r => {
+      if (!r.cat) r.cat = descobrirEmpresa(empresa, r);
+      if (!r.cat) naoIdentificados.push(r.cod + ' ' + r.nome + ' (' + r.local + ')');
+      return !!r.cat;
+    });
+    if (!regs.length) throw new Error('Não consegui identificar a empresa de nenhum item. Exporte com a coluna “Minha Empresa”.');
     const rotulos = new Set(regs.map(r => r.cat));
     /* Itens atuais, em qualquer organização anterior (local como categoria ou como setor). */
     const atuais = [];
@@ -171,7 +194,7 @@
     for (const { r, a } of pares) {
       const s = pegar(r.setor), id = a ? a.it.id : novoId();
       if (a) { mover(a, s); atualizados++; } else novos++;
-      s.itens.push({ id, cod: r.cod, nome: r.nome, un: r.un, cat: r.cat });
+      s.itens.push({ id, cod: r.cod, nome: r.nome, un: r.un || (a ? a.it.un : ''), cat: r.cat });
       s.sys[id] = r.q;
     }
     /* O que não veio na exportação permanece, com o saldo que tinha. */
@@ -183,7 +206,7 @@
     }
     for (const s of setores.values()) s.itens.sort((x, y) => (x.cat + '|' + x.nome).localeCompare(y.cat + '|' + y.nome, 'pt-BR'));
     empresa.setores = [...setores.values()].sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR'));
-    return { total: regs.length, novos, atualizados, fora, setores: empresa.setores.length };
+    return { total: regs.length, novos, atualizados, fora, naoIdentificados, setores: empresa.setores.length };
   }
 
   /* Converte a organização antiga (setor = empresa e local) para setor = família. */

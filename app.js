@@ -185,11 +185,12 @@
       /* Trabalha numa cópia: se algo falhar ou for cancelado, nada muda. */
       const copia = JSON.parse(JSON.stringify(emp()));
       const r = C.importarPosicao(copia, plan);
-      if (!confirm('Importar para “' + copia.nome + '”?\n\n' + r.total + ' itens na planilha\n' + r.atualizados + ' já cadastrados (contagens mantidas)\n' + r.novos + ' novos\n' + r.fora + ' do app que não estão na planilha (mantidos)')) return;
+      if (!confirm('Importar para “' + copia.nome + '”?\n\n' + r.total + ' itens na planilha\n' + r.atualizados + ' já cadastrados (contagens mantidas)\n' + r.novos + ' novos\n' + r.fora + ' do app que não estão na planilha (mantidos)'
+        + (r.naoIdentificados.length ? '\n\nNÃO importados, empresa não identificada (' + r.naoIdentificados.length + '):\n' + r.naoIdentificados.slice(0, 10).join('\n') : ''))) return;
       estado.empresas[estado.empresas.findIndex(e => e.id === copia.id)] = copia;
       $('q').value = ''; $('filtro').value = '';
       salvar(); tudo(); salvar();
-      alert('Pronto: ' + r.total + ' itens em ' + r.setores + ' famílias.');
+      alert('Pronto: saldo de ' + r.total + ' itens atualizado.');
     } catch (e) { alert('Não foi possível importar. ' + e.message); }
   };
 
