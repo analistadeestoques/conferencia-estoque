@@ -32,6 +32,10 @@
   const setor = () => emp().setores.find(s => s.id === estado.sel.set) || emp().setores[0];
   const hoje = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 
+  /* A categoria guarda "Hotel - Almoxarifado"; na tela, o filtro mostra só o local. */
+  const COM_EMPRESA = /^(Hotel|A&B) - /;
+  const localDe = c => (c || '').replace(COM_EMPRESA, '');
+  const empresaDe = c => (COM_EMPRESA.exec(c || '') || [])[1] || '';
   function opcoes(sel, lista, valor) {
     sel.replaceChildren(...lista.map(([v, t]) => { const o = el('option', '', t); o.value = v; return o; }));
     sel.value = valor;
@@ -42,8 +46,8 @@
     if (!s.data) s.data = hoje();
     opcoes($('emp'), estado.empresas.map(x => [x.id, x.nome]), e.id);
     opcoes($('set'), e.setores.map(x => [x.id, x.nome]), s.id);
-    const cats = [...new Set(s.itens.map(i => i.cat).filter(Boolean))].sort();
-    opcoes($('cat'), [['', 'Todas as categorias'], ...cats.map(c => [c, c])], cats.includes($('cat').value) ? $('cat').value : '');
+    const cats = [...new Set(s.itens.map(i => localDe(i.cat)).filter(Boolean))].sort();
+    opcoes($('cat'), [['', s.itens.some(i => empresaDe(i.cat)) ? 'Todos os locais' : 'Todas as categorias'], ...cats.map(c => [c, c])], cats.includes($('cat').value) ? $('cat').value : '');
     $('data').value = s.data; $('resp').value = s.resp; $('cego').checked = s.cego;
     if (s.cego && $('filtro').value === 'div') $('filtro').value = '';
     $('filtro').querySelector('[value=div]').disabled = s.cego;
@@ -62,6 +66,7 @@
     if (it.cod) titulo.append(el('span', 'cod', it.cod));
     titulo.append(el('span', 'desc', it.nome));
     if (it.un) titulo.append(el('span', 'un', it.un));
+    if (empresaDe(it.cat)) titulo.append(el('span', 'un', '(' + empresaDe(it.cat) + ')'));
     nm.append(titulo);
     const del = el('button', 'x del', 'Excluir item');
     del.onclick = () => {
@@ -115,14 +120,14 @@
     const s = setor(), q = C.norm($('q').value), cat = $('cat').value, f = $('filtro').value;
     const itens = s.itens.filter(it => {
       if (q && !C.norm(it.nome + ' ' + it.cod).includes(q)) return false;
-      if (cat && it.cat !== cat) return false;
+      if (cat && localDe(it.cat) !== cat) return false;
       const t = C.situacao(s, it).tipo;
       return !f || (f === 'div' ? t === 'falta' || t === 'sobra' : t === f);
     });
     const grupos = new Map();
-    itens.forEach(it => { const g = it.cat || 'Sem categoria'; if (!grupos.has(g)) grupos.set(g, []); grupos.get(g).push(it); });
+    itens.forEach(it => { const g = localDe(it.cat) || 'Sem categoria'; if (!grupos.has(g)) grupos.set(g, []); grupos.get(g).push(it); });
     const nos = [];
-    grupos.forEach((g, nome) => { nos.push(el('h2', '', nome)); g.forEach(it => nos.push(linha(it))); });
+    grupos.forEach((g, nome) => { nos.push(el('h2', '', nome)); g.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).forEach(it => nos.push(linha(it))); });
     if (!nos.length) nos.push(el('div', 'vazio', s.itens.length ? 'Nenhum item com esses filtros.' : 'Este setor ainda não tem itens. Toque em “Cadastrar itens” e cole a sua lista.'));
     $('lista').replaceChildren(...nos);
     status();
