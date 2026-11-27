@@ -20,7 +20,7 @@ button.p{background:var(--ac);border-color:var(--ac);color:#fff}
 button.x{color:var(--falta)}
 header label{display:flex;gap:6px;align-items:center;font-size:14px}
 header label input[type=checkbox]{min-height:0;width:22px;height:22px}
-header select{flex:1;min-width:150px}
+header select{flex:1;min-width:150px;width:0}
 #q{flex:2;min-width:180px}
 #stat{font-weight:600;font-size:14px}
 #aviso{display:none;background:var(--falta);color:#fff;padding:8px 12px;font-weight:600}
@@ -57,6 +57,7 @@ dialog .row{margin:8px 0 0}
 <header>
   <div class="row">
     <select id="emp" aria-label="Empresa"></select>
+    <select id="cat" aria-label="Local de estoque"></select>
     <select id="set" aria-label="Setor"></select>
     <button id="bMenu">⚙ Opções</button>
   </div>
@@ -67,7 +68,6 @@ dialog .row{margin:8px 0 0}
   </div>
   <div class="row">
     <input id="q" type="search" placeholder="Buscar item ou código…">
-    <select id="cat" aria-label="Local de estoque"></select>
     <select id="filtro" aria-label="Situação">
       <option value="">Todos</option><option value="nao_contado">Não contados</option><option value="div">Divergências</option>
     </select>
