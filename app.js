@@ -51,8 +51,11 @@
 
   function linha(it) {
     const s = setor();
-    const d = el('div'), nm = el('div', 'nm', it.nome);
-    nm.append(el('small', '', [it.cod, it.un].filter(Boolean).join(' · ')));
+    const d = el('div'), nm = el('div', 'nm'), titulo = el('div', 'titulo');
+    if (it.cod) titulo.append(el('span', 'cod', it.cod));
+    titulo.append(el('span', 'desc', it.nome));
+    if (it.un) titulo.append(el('span', 'un', it.un));
+    nm.append(titulo);
     const del = el('button', 'x del', 'Excluir item');
     del.onclick = () => {
       if (!confirm('Excluir “' + it.nome + '” deste setor, com contagem, saldo e observação?')) return;
