@@ -26,7 +26,9 @@ header select{flex:1;min-width:150px;width:0}
 .quem{font-size:14px}
 .nomes{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 #uNome,.pin{width:100%;margin-bottom:8px}
-#uErro{color:var(--falta);font-weight:600}
+#uErro,#aMsg{color:var(--falta);font-weight:600}
+.usu{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)}
+.usu span{flex:1;min-width:140px;font-weight:600}
 #aviso{display:none;background:var(--falta);color:#fff;padding:8px 12px;font-weight:600}
 main{max-width:1000px;margin:0 auto;padding:10px 12px 40px}
 h2{font-size:14px;text-transform:uppercase;color:var(--mut);margin:18px 0 8px}
@@ -96,7 +98,19 @@ dialog .row{margin:8px 0 0}
     <input id="uPin" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="PIN de 4 números" aria-label="PIN">
     <input id="uPin2" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="Repita o PIN para confirmar" aria-label="Repita o PIN" hidden>
     <div id="uErro" role="alert"></div>
-    <div class="row"><button class="p" type="submit">Entrar</button><button type="button" id="uCancelar">Cancelar</button><button type="button" id="uEsqueci" hidden>Esqueci o PIN</button></div>
+    <div class="row"><button class="p" type="submit">Entrar</button><button type="button" id="uCancelar">Cancelar</button></div>
+  </form>
+</dialog>
+
+<dialog id="dAdm">
+  <h3>Cadastro de usuários</h3>
+  <div id="aLista"></div>
+  <form id="aForm">
+    <p id="aTitulo"></p>
+    <input id="aNome" class="pin" placeholder="Nome e sobrenome" autocomplete="off" maxlength="60">
+    <input id="aPin" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="PIN de 4 números">
+    <div id="aMsg" role="alert"></div>
+    <div class="row"><button class="p" type="submit">Salvar</button><button type="button" id="aNovo">Novo usuário</button><button type="button" id="aCodigo">Novo código de recuperação</button><button type="button" data-fechar>Fechar</button></div>
   </form>
 </dialog>
 
@@ -128,6 +142,8 @@ dialog .row{margin:8px 0 0}
   <div class="row"><button class="x" id="mZerar">Zerar saldos</button></div>
   <p>Apaga a lista de itens do setor selecionado.</p>
   <div class="row"><button class="x" id="mLimpar">Excluir todos os itens do setor</button></div>
+  <div id="mAdmBox"><p id="mAdmTxt"></p>
+  <div class="row"><button id="mSouAdm">Definir-me como administrador</button><button class="p" id="mUsuarios">Cadastro de usuários</button></div></div>
   <p>Backup de todas as empresas. Guarde o arquivo fora do tablet de vez em quando.</p>
   <div class="row"><button class="p" id="mBk">Baixar backup</button><button id="mRs">Restaurar backup</button><input type="file" id="mFile" accept=".json" hidden></div>
   <div class="row"><button data-fechar>Fechar</button></div>

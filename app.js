@@ -151,14 +151,17 @@
   const cadastrado = nome => (estado.usuarios || []).find(n => C.norm(n) === C.norm(nome));
   const temPin = nome => !!(nome && estado.pins && estado.pins[nome]);
   async function resumoPin(nome, pin) {
-    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(C.norm(nome) + ':' + pin));
+    /* "sais" preserva o PIN de quem teve o nome corrigido. */
+    const sal = (estado.sais && estado.sais[nome]) || C.norm(nome);
+    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sal + ':' + pin));
     return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
   }
   function ajustarPin() {
     const n = cadastrado($('uNome').value), criar = !temPin(n);
     $('uPin').placeholder = criar ? 'Crie um PIN de 4 números' : 'Digite o seu PIN';
     $('uPin2').hidden = !criar;
-    $('uEsqueci').hidden = criar;
+    /* O administrador também pode digitar o código de recuperação, de 8 números. */
+    $('uPin').maxLength = n && n === estado.admin ? 8 : 4;
     $('uErro').textContent = '';
   }
   function pedirUsuario() {
@@ -177,10 +180,17 @@
     const digitado = $('uNome').value.replace(/\s+/g, ' ').trim(), pin = $('uPin').value;
     const erro = t => { $('uErro').textContent = t; };
     if (!digitado) return erro('Digite ou toque no seu nome.');
+    const nome = cadastrado(digitado) || digitado;
+    if (nome === estado.admin && /^\d{8}$/.test(pin)) {
+      if (await resumoPin(nome, pin) !== estado.recuperacao) return erro('Código de recuperação incorreto.');
+      delete estado.pins[nome]; salvar();
+      $('uPin').value = $('uPin2').value = ''; ajustarPin();
+      return erro('Código aceito. Crie o novo PIN.');
+    }
     if (!/^\d{4}$/.test(pin)) return erro('O PIN precisa ter 4 números.');
-    const nome = cadastrado(digitado) || digitado, hash = await resumoPin(nome, pin);
+    const hash = await resumoPin(nome, pin);
     if (temPin(nome)) {
-      if (estado.pins[nome] !== hash) { $('uPin').value = ''; return erro('PIN incorreto.'); }
+      if (estado.pins[nome] !== hash) { $('uPin').value = ''; return erro('PIN incorreto. Peça ao administrador para trocar.'); }
     } else {
       if ($('uPin2').value !== pin) return erro('Os dois PINs precisam ser iguais.');
       estado.pins = estado.pins || {}; estado.pins[nome] = hash;
@@ -193,12 +203,75 @@
   }
   $('uNome').oninput = ajustarPin;
   $('uForm').onsubmit = e => { e.preventDefault(); entrar().catch(() => { $('uErro').textContent = 'Não foi possível conferir o PIN neste navegador.'; }); };
-  $('uEsqueci').onclick = () => {
-    const n = cadastrado($('uNome').value);
-    if (!n || !confirm('Apagar o PIN de “' + n + '” e criar um novo?')) return;
-    delete estado.pins[n]; salvar();
-    $('uPin').value = $('uPin2').value = ''; ajustarPin();
+
+  /* Cadastro de usuários: só o administrador. */
+  const souAdmin = () => identificado() && !!estado.admin && estado.usuario === estado.admin;
+  function ajustarMenu() {
+    $('mSouAdm').hidden = !!estado.admin || !identificado();
+    $('mUsuarios').hidden = !souAdmin();
+    $('mAdmTxt').textContent = estado.admin ? 'Administrador: ' + estado.admin : 'Este aparelho ainda não tem administrador.';
+  }
+  async function novoCodigo() {
+    const codigo = String(10000000 + crypto.getRandomValues(new Uint32Array(1))[0] % 90000000);
+    estado.recuperacao = await resumoPin(estado.admin, codigo); salvar();
+    alert('ANOTE E GUARDE o código de recuperação do administrador:\n\n' + codigo + '\n\nSe esquecer o PIN, digite esse código no lugar dele. Ele não será mostrado novamente.');
+  }
+  $('mSouAdm').onclick = async () => {
+    if (estado.admin || !confirm('Definir “' + estado.usuario + '” como administrador deste aparelho?')) return;
+    estado.admin = estado.usuario; salvar(); await novoCodigo(); ajustarMenu();
   };
+  let editando = '';
+  function editar(nome) {
+    editando = nome;
+    $('aTitulo').textContent = nome ? 'Alterando: ' + nome + ' (deixe o PIN vazio para manter o atual)' : 'Novo usuário';
+    $('aNome').value = nome; $('aPin').value = ''; $('aMsg').textContent = '';
+  }
+  function listaUsuarios() {
+    $('aLista').replaceChildren(...(estado.usuarios || []).map(n => {
+      const d = el('div', 'usu'), ed = el('button', '', 'Alterar nome / PIN');
+      ed.type = 'button'; ed.onclick = () => { editar(n); $('aNome').focus(); };
+      d.append(el('span', '', n + (n === estado.admin ? ' (administrador)' : '')), ed);
+      if (n !== estado.admin) {
+        const x = el('button', 'x', 'Excluir'); x.type = 'button';
+        x.onclick = () => {
+          if (!confirm('Excluir o usuário “' + n + '”? As contagens já feitas continuam com o nome dele.')) return;
+          estado.usuarios = estado.usuarios.filter(u => u !== n);
+          delete (estado.pins || {})[n]; delete (estado.sais || {})[n];
+          salvar(); listaUsuarios(); editar('');
+        };
+        d.append(x);
+      }
+      return d;
+    }));
+  }
+  async function salvarUsuario() {
+    if (!souAdmin()) return;
+    const novo = $('aNome').value.replace(/\s+/g, ' ').trim(), pin = $('aPin').value, antigo = editando;
+    const erro = t => { $('aMsg').textContent = t; };
+    if (!novo || novo.includes(',')) return erro('Digite o nome, sem vírgulas.');
+    const outro = cadastrado(novo);
+    if (outro && outro !== antigo) return erro('Já existe um usuário com esse nome.');
+    if (pin && !/^\d{4}$/.test(pin)) return erro('O PIN precisa ter 4 números.');
+    if (!antigo && !pin) return erro('Informe o PIN do novo usuário.');
+    estado.usuarios = estado.usuarios || []; estado.pins = estado.pins || {}; estado.sais = estado.sais || {};
+    if (!antigo) estado.usuarios.push(novo);
+    else if (antigo !== novo) {
+      estado.sais[novo] = estado.sais[antigo] || C.norm(antigo); delete estado.sais[antigo];
+      if (estado.pins[antigo]) estado.pins[novo] = estado.pins[antigo];
+      delete estado.pins[antigo];
+      estado.usuarios[estado.usuarios.indexOf(antigo)] = novo;
+      if (estado.usuario === antigo) estado.usuario = novo;
+      if (estado.admin === antigo) estado.admin = novo;
+      for (const e of estado.empresas) for (const s of e.setores) if (s.resp) s.resp = s.resp.split(', ').map(n => n === antigo ? novo : n).join(', ');
+    }
+    if (pin) estado.pins[novo] = await resumoPin(novo, pin);
+    salvar(); cabecalho(); listaUsuarios(); editar('');
+    erro('Salvo.');
+  }
+  $('mUsuarios').onclick = () => { if (!souAdmin()) return; $('dMenu').close(); listaUsuarios(); editar(''); $('dAdm').showModal(); };
+  $('aForm').onsubmit = e => { e.preventDefault(); salvarUsuario(); };
+  $('aNovo').onclick = () => { editar(''); $('aNome').focus(); };
+  $('aCodigo').onclick = () => { if (souAdmin() && confirm('Gerar um novo código? O anterior deixa de valer.')) novoCodigo(); };
   $('uCancelar').onclick = () => $('dUser').close();
   $('dUser').addEventListener('cancel', e => { if (!identificado()) e.preventDefault(); });
   $('dUser').addEventListener('close', () => { if (!identificado()) setTimeout(pedirUsuario); });
@@ -291,7 +364,7 @@
   const fechar = () => $('dMenu').close();
   const pedir = (msg, atual) => (prompt(msg, atual || '') || '').trim();
   const mudou = () => { salvar(); tudo(); salvar(); fechar(); };
-  $('bMenu').onclick = () => $('dMenu').showModal();
+  $('bMenu').onclick = () => { ajustarMenu(); $('dMenu').showModal(); };
   $('mNovoSetor').onclick = () => { const n = pedir('Nome do novo setor'); if (!n) return; const s = C.novoSetor(n); emp().setores.push(s); estado.sel.set = s.id; mudou(); };
   $('mRenSetor').onclick = () => { const n = pedir('Novo nome do setor', setor().nome); if (n) { setor().nome = n; mudou(); } };
   $('mDelSetor').onclick = () => {
@@ -329,6 +402,7 @@
     let novo;
     try { novo = C.lerBackup(await f.text()); } catch (e) { return alert('Arquivo de backup inválido.'); }
     if (!confirm('Substituir TODOS os dados deste tablet pelo backup?')) return;
+    if (estado.admin) for (const k of ['usuarios', 'pins', 'sais', 'admin', 'recuperacao', 'usuario']) novo[k] = estado[k];
     estado = novo; bloqueado = false; aviso(''); converter(); mudou();
   };
 
