@@ -25,7 +25,8 @@ header select{flex:1;min-width:150px;width:0}
 #stat{font-weight:600;font-size:14px}
 .quem{font-size:14px}
 .nomes{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
-#uNome{width:100%}
+#uNome,.pin{width:100%;margin-bottom:8px}
+#uErro{color:var(--falta);font-weight:600}
 #aviso{display:none;background:var(--falta);color:#fff;padding:8px 12px;font-weight:600}
 main{max-width:1000px;margin:0 auto;padding:10px 12px 40px}
 h2{font-size:14px;text-transform:uppercase;color:var(--mut);margin:18px 0 8px}
@@ -92,7 +93,10 @@ dialog .row{margin:8px 0 0}
     <div class="nomes" id="uLista"></div>
     <p>Primeiro acesso? Digite o seu nome para cadastrar.</p>
     <input id="uNome" placeholder="Nome e sobrenome" autocomplete="off" maxlength="60">
-    <div class="row"><button class="p" type="submit">Entrar</button><button type="button" id="uCancelar">Cancelar</button></div>
+    <input id="uPin" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="PIN de 4 números" aria-label="PIN">
+    <input id="uPin2" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="Repita o PIN para confirmar" aria-label="Repita o PIN" hidden>
+    <div id="uErro" role="alert"></div>
+    <div class="row"><button class="p" type="submit">Entrar</button><button type="button" id="uCancelar">Cancelar</button><button type="button" id="uEsqueci" hidden>Esqueci o PIN</button></div>
   </form>
 </dialog>
 

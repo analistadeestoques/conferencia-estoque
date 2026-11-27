@@ -147,24 +147,58 @@
     $('data').textContent = hoje().split('-').reverse().join('/');
     $('resp').textContent = estado.usuario || '—';
   }
+  /* PIN: evita contar no nome de outra pessoa por engano. Não é segurança forte. */
+  const cadastrado = nome => (estado.usuarios || []).find(n => C.norm(n) === C.norm(nome));
+  const temPin = nome => !!(nome && estado.pins && estado.pins[nome]);
+  async function resumoPin(nome, pin) {
+    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(C.norm(nome) + ':' + pin));
+    return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  function ajustarPin() {
+    const n = cadastrado($('uNome').value), criar = !temPin(n);
+    $('uPin').placeholder = criar ? 'Crie um PIN de 4 números' : 'Digite o seu PIN';
+    $('uPin2').hidden = !criar;
+    $('uEsqueci').hidden = criar;
+    $('uErro').textContent = '';
+  }
   function pedirUsuario() {
     if ($('dUser').open) return;
-    $('uNome').value = '';
+    $('uNome').value = $('uPin').value = $('uPin2').value = '';
+    ajustarPin();
     $('uCancelar').hidden = !identificado();
-    $('uLista').replaceChildren(...(estado.usuarios || []).map(n => { const b = el('button', '', n); b.type = 'button'; b.onclick = () => entrar(n); return b; }));
+    $('uLista').replaceChildren(...(estado.usuarios || []).map(n => {
+      const b = el('button', '', n); b.type = 'button';
+      b.onclick = () => { $('uNome').value = n; $('uPin').value = $('uPin2').value = ''; ajustarPin(); $('uPin').focus(); };
+      return b;
+    }));
     $('dUser').showModal();
   }
-  function entrar(nome) {
-    nome = nome.replace(/\s+/g, ' ').trim();
-    if (!nome) return;
+  async function entrar() {
+    const digitado = $('uNome').value.replace(/\s+/g, ' ').trim(), pin = $('uPin').value;
+    const erro = t => { $('uErro').textContent = t; };
+    if (!digitado) return erro('Digite ou toque no seu nome.');
+    if (!/^\d{4}$/.test(pin)) return erro('O PIN precisa ter 4 números.');
+    const nome = cadastrado(digitado) || digitado, hash = await resumoPin(nome, pin);
+    if (temPin(nome)) {
+      if (estado.pins[nome] !== hash) { $('uPin').value = ''; return erro('PIN incorreto.'); }
+    } else {
+      if ($('uPin2').value !== pin) return erro('Os dois PINs precisam ser iguais.');
+      estado.pins = estado.pins || {}; estado.pins[nome] = hash;
+    }
     estado.usuarios = estado.usuarios || [];
-    const existe = estado.usuarios.find(n => C.norm(n) === C.norm(nome));
-    if (!existe) estado.usuarios.push(nome);
-    estado.usuario = existe || nome;
+    if (!estado.usuarios.includes(nome)) estado.usuarios.push(nome);
+    estado.usuario = nome;
     try { sessionStorage.setItem(SESSAO, hoje()); } catch (e) { /* pergunta de novo depois */ }
     salvar(); cabecalho(); $('dUser').close();
   }
-  $('uForm').onsubmit = e => { e.preventDefault(); entrar($('uNome').value); };
+  $('uNome').oninput = ajustarPin;
+  $('uForm').onsubmit = e => { e.preventDefault(); entrar().catch(() => { $('uErro').textContent = 'Não foi possível conferir o PIN neste navegador.'; }); };
+  $('uEsqueci').onclick = () => {
+    const n = cadastrado($('uNome').value);
+    if (!n || !confirm('Apagar o PIN de “' + n + '” e criar um novo?')) return;
+    delete estado.pins[n]; salvar();
+    $('uPin').value = $('uPin2').value = ''; ajustarPin();
+  };
   $('uCancelar').onclick = () => $('dUser').close();
   $('dUser').addEventListener('cancel', e => { if (!identificado()) e.preventDefault(); });
   $('dUser').addEventListener('close', () => { if (!identificado()) setTimeout(pedirUsuario); });
