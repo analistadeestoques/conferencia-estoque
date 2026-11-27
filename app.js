@@ -232,6 +232,14 @@
     if (!confirm('Zerar contagens, saldo e observações de “' + setor().nome + '”?')) return;
     const s = setor(); s.cont = {}; s.sys = {}; s.obs = {}; s.data = hoje(); mudou();
   };
+  $('mZerar').onclick = () => {
+    const e = emp();
+    if (!confirm('Zerar saldos, contagens e observações de TODAS as famílias de “' + e.nome + '”?')) return;
+    baixar('backup_antes_de_zerar_' + hoje() + '.json', C.backup(estado), 'application/json');
+    for (const s of e.setores) { s.cont = {}; s.sys = {}; s.obs = {}; s.data = hoje(); }
+    $('filtro').value = '';
+    mudou();
+  };
   $('mLimpar').onclick = () => {
     const s = setor();
     if (!confirm('Excluir TODOS os ' + s.itens.length + ' itens de “' + emp().nome + ' / ' + s.nome + '”, com contagens e saldos?')) return;

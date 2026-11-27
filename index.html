@@ -41,7 +41,7 @@ h2{font-size:14px;text-transform:uppercase;color:var(--mut);margin:18px 0 8px}
 .obs{grid-column:1/-1;min-height:38px;padding:6px 10px;font-size:14px}
 .cego .saldo,.cego .dif{visibility:hidden}
 .vazio{background:var(--card);border:1px dashed var(--bd);border-radius:12px;padding:24px;text-align:center}
-dialog{width:min(680px,94vw);max-height:90vh;border:0;border-radius:16px;padding:16px;background:var(--card);color:var(--tx)}
+dialog{overflow:auto;width:min(680px,94vw);max-height:90vh;border:0;border-radius:16px;padding:16px;background:var(--card);color:var(--tx)}
 dialog::backdrop{background:rgba(0,0,0,.55)}
 dialog h3{margin:0 0 8px}
 dialog p{color:var(--mut);font-size:14px;margin:6px 0}
@@ -106,6 +106,8 @@ dialog .row{margin:8px 0 0}
   <div class="row"><button id="mNovaEmp">Nova empresa</button><button id="mRenEmp">Renomear empresa</button><button class="x" id="mDelEmp">Excluir empresa</button></div>
   <p>Zera contagens, saldo e observações deste setor. A lista de itens fica.</p>
   <div class="row"><button class="x" id="mNova">Nova conferência</button></div>
+  <p>Novo inventário: zera saldos, contagens e observações de TODAS as famílias da empresa selecionada. Os itens ficam. Um backup é baixado antes.</p>
+  <div class="row"><button class="x" id="mZerar">Zerar saldos</button></div>
   <p>Apaga a lista de itens do setor selecionado.</p>
   <div class="row"><button class="x" id="mLimpar">Excluir todos os itens do setor</button></div>
   <p>Backup de todas as empresas. Guarde o arquivo fora do tablet de vez em quando.</p>
