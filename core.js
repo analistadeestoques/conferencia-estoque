@@ -186,6 +186,28 @@
     return { total: regs.length, novos, atualizados, fora, setores: empresa.setores.length };
   }
 
+  /* Converte a organização antiga (setor = empresa e local) para setor = família. */
+  function reorganizarPorFamilia(estado) {
+    const antigo = /^(Hotel|A&B) - /;
+    let mudou = false;
+    for (const e of estado.empresas) {
+      if (!e.setores.some(s => antigo.test(s.nome) && s.itens.length)) continue;
+      const novos = new Map();
+      const pegar = nome => { if (!novos.has(nome)) novos.set(nome, novoSetor(nome)); return novos.get(nome); };
+      for (const s of e.setores) for (const it of s.itens) {
+        const velho = antigo.test(s.nome);
+        const d = pegar(velho ? (it.cat === 'Limpeza' ? 'Material de limpeza' : it.cat || 'Sem família') : s.nome);
+        if (!d.itens.length) Object.assign(d, { resp: s.resp, data: s.data, cego: s.cego });
+        d.itens.push(velho ? Object.assign({}, it, { cat: s.nome }) : it);
+        for (const k of ['cont', 'sys', 'obs']) if (s[k][it.id] !== undefined) d[k][it.id] = s[k][it.id];
+      }
+      for (const s of novos.values()) s.itens.sort((x, y) => (x.cat + '|' + x.nome).localeCompare(y.cat + '|' + y.nome, 'pt-BR'));
+      e.setores = [...novos.values()].sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR'));
+      mudou = true;
+    }
+    return mudou;
+  }
+
   function situacao(setor, it) {
     const v = setor.cont[it.id], s = setor.sys[it.id];
     const fisico = v && v.length ? arred(v.reduce((a, b) => a + b, 0)) : null;
@@ -254,6 +276,6 @@
     return o;
   }
 
-  const api = { novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
+  const api = { novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
   if (typeof module !== 'undefined') module.exports = api; else root.Core = api;
 })(this);

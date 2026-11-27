@@ -19,6 +19,13 @@
     try { localStorage.setItem(KEY, JSON.stringify(estado)); }
     catch (e) { aviso('ATENÇÃO: o tablet não conseguiu salvar. Baixe um backup agora (Opções).'); }
   }
+  function converter() {
+    const antes = JSON.stringify(estado);
+    if (!C.reorganizarPorFamilia(estado)) return;
+    /* Guarda uma cópia da organização anterior antes de gravar a nova. */
+    try { localStorage.setItem(KEY + '-antes-familias', antes); } catch (e) { /* sem espaço: segue */ }
+  }
+  if (!bloqueado) converter();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
 
   const emp = () => estado.empresas.find(e => e.id === estado.sel.emp) || estado.empresas[0];
@@ -238,7 +245,7 @@
     let novo;
     try { novo = C.lerBackup(await f.text()); } catch (e) { return alert('Arquivo de backup inválido.'); }
     if (!confirm('Substituir TODOS os dados deste tablet pelo backup?')) return;
-    estado = novo; bloqueado = false; aviso(''); mudou();
+    estado = novo; bloqueado = false; aviso(''); converter(); mudou();
   };
 
   tudo(); salvar();
