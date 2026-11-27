@@ -371,6 +371,23 @@
     return o;
   }
 
-  const api = { novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, separarEmpresas, importarExcel, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
+  /* Arquivo para levar os usuários (com PINs embaralhados) a outro aparelho. */
+  const CHAVES_USU = ['usuarios', 'pins', 'sais', 'admin', 'recuperacao'];
+  function arquivoUsuarios(estado) {
+    const o = { app: 'conferencia-estoque', tipo: 'usuarios' };
+    for (const k of CHAVES_USU) if (estado[k] !== undefined) o[k] = estado[k];
+    return JSON.stringify(o);
+  }
+  function lerUsuarios(texto) {
+    const o = JSON.parse(texto);
+    const ok = o && o.app === 'conferencia-estoque' && o.tipo === 'usuarios' && Array.isArray(o.usuarios) && o.usuarios.length &&
+      o.usuarios.every(n => typeof n === 'string' && n.trim());
+    if (!ok) throw new Error('Arquivo de usuários inválido');
+    const r = {};
+    for (const k of CHAVES_USU) if (o[k] !== undefined) r[k] = o[k];
+    return r;
+  }
+
+  const api = { arquivoUsuarios, lerUsuarios, novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, separarEmpresas, importarExcel, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
   if (typeof module !== 'undefined') module.exports = api; else root.Core = api;
 })(this);

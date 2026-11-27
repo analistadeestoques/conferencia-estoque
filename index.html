@@ -56,6 +56,7 @@ dialog .row{margin:8px 0 0}
 #dres{white-space:pre-wrap;font-size:14px}
 @media (max-height:900px){header{position:static}}
 @media (max-width:720px){.it{grid-template-columns:repeat(3,minmax(0,1fr))}.nm,.cont{grid-column:1/-1}}
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
@@ -92,13 +93,19 @@ dialog .row{margin:8px 0 0}
 <dialog id="dUser">
   <form id="uForm">
     <h3>Quem vai fazer a contagem?</h3>
+    <div id="uEscolha">
+      <p>Você já tem um usuário?</p>
+      <div class="row"><button type="button" class="p" id="uJa">Já tenho usuário</button><button type="button" id="uNovo">Cadastro novo</button></div>
+    </div>
+    <div id="uCampos">
+    <p id="uTexto"></p>
     <div class="nomes" id="uLista"></div>
-    <p>Primeiro acesso? Digite o seu nome para cadastrar.</p>
     <input id="uNome" placeholder="Nome e sobrenome" autocomplete="off" maxlength="60">
     <input id="uPin" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="PIN de 4 números" aria-label="PIN">
     <input id="uPin2" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="Repita o PIN para confirmar" aria-label="Repita o PIN" hidden>
+    </div>
     <div id="uErro" role="alert"></div>
-    <div class="row"><button class="p" type="submit">Entrar</button><button type="button" id="uCancelar">Cancelar</button></div>
+    <div class="row"><button class="p" type="submit" id="uEntrar">Entrar</button><button type="button" class="p" id="uTrazer">Trazer usuários do arquivo</button><input type="file" id="uArq" accept=".json" hidden><button type="button" id="uVoltar">Voltar</button><button type="button" id="uCancelar">Cancelar</button></div>
   </form>
 </dialog>
 
@@ -110,7 +117,7 @@ dialog .row{margin:8px 0 0}
     <input id="aNome" class="pin" placeholder="Nome e sobrenome" autocomplete="off" maxlength="60">
     <input id="aPin" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="PIN de 4 números">
     <div id="aMsg" role="alert"></div>
-    <div class="row"><button class="p" type="submit">Salvar</button><button type="button" id="aNovo">Novo usuário</button><button type="button" id="aCodigo">Novo código de recuperação</button><button type="button" data-fechar>Fechar</button></div>
+    <div class="row"><button class="p" type="submit">Salvar</button><button type="button" id="aNovo">Novo usuário</button><button type="button" id="aCodigo">Novo código de recuperação</button><button type="button" id="aExportar">Salvar arquivo de usuários</button><button type="button" data-fechar>Fechar</button></div>
   </form>
 </dialog>
 

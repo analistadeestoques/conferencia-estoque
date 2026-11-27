@@ -156,30 +156,64 @@
     const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sal + ':' + pin));
     return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
   }
+  /* Tela de entrada: '' = pergunta, 'ja' = já tenho usuário, 'novo' = cadastro novo. */
+  let modoEntrada = '';
+  const semUsuarios = () => !(estado.usuarios || []).length;
   function ajustarPin() {
-    const n = cadastrado($('uNome').value), criar = !temPin(n);
+    const n = cadastrado($('uNome').value), criar = modoEntrada === 'novo' || (!!n && !temPin(n));
     $('uPin').placeholder = criar ? 'Crie um PIN de 4 números' : 'Digite o seu PIN';
     $('uPin2').hidden = !criar;
     /* O administrador também pode digitar o código de recuperação, de 8 números. */
-    $('uPin').maxLength = n && n === estado.admin ? 8 : 4;
+    $('uPin').maxLength = modoEntrada === 'ja' && n && n === estado.admin ? 8 : 4;
     $('uErro').textContent = '';
+  }
+  function mostrar(m) {
+    modoEntrada = m;
+    const vazio = m === 'ja' && semUsuarios();
+    $('uNome').value = $('uPin').value = $('uPin2').value = '';
+    $('uEscolha').hidden = !!m;
+    $('uCampos').hidden = !m || vazio;
+    $('uEntrar').hidden = !m || vazio;
+    $('uVoltar').hidden = !m;
+    $('uTrazer').hidden = !vazio;
+    $('uLista').hidden = m !== 'ja';
+    $('uTexto').textContent = m === 'novo' ? 'Digite o seu nome e crie um PIN.' : 'Toque no seu nome e digite o PIN.';
+    ajustarPin();
+    if (vazio) $('uErro').textContent = 'Este aparelho ainda não tem usuários. Traga o arquivo de usuários salvo no outro aparelho, ou toque em Voltar e faça um Cadastro novo.';
   }
   function pedirUsuario() {
     if ($('dUser').open) return;
-    $('uNome').value = $('uPin').value = $('uPin2').value = '';
-    ajustarPin();
     $('uCancelar').hidden = !identificado();
     $('uLista').replaceChildren(...(estado.usuarios || []).map(n => {
       const b = el('button', '', n); b.type = 'button';
       b.onclick = () => { $('uNome').value = n; $('uPin').value = $('uPin2').value = ''; ajustarPin(); $('uPin').focus(); };
       return b;
     }));
+    mostrar('');
     $('dUser').showModal();
   }
+  $('uJa').onclick = () => mostrar('ja');
+  $('uNovo').onclick = () => { mostrar('novo'); $('uNome').focus(); };
+  $('uVoltar').onclick = () => mostrar('');
+  $('uTrazer').onclick = () => $('uArq').click();
+  $('uArq').onchange = async () => {
+    const arq = $('uArq').files[0]; $('uArq').value = '';
+    if (!arq || !semUsuarios()) return;
+    try {
+      Object.assign(estado, C.lerUsuarios(await arq.text()));
+      salvar(); $('dUser').close();
+      if (!$('dUser').open) pedirUsuario();
+      mostrar('ja');
+    } catch (e) { $('uErro').textContent = 'Esse não é um arquivo de usuários válido.'; }
+  };
   async function entrar() {
     const digitado = $('uNome').value.replace(/\s+/g, ' ').trim(), pin = $('uPin').value;
     const erro = t => { $('uErro').textContent = t; };
+    if (!modoEntrada) return;
     if (!digitado) return erro('Digite ou toque no seu nome.');
+    if (modoEntrada === 'ja' && !cadastrado(digitado)) return erro('Usuário não encontrado neste aparelho. Toque em Voltar e escolha Cadastro novo.');
+    if (modoEntrada === 'novo' && cadastrado(digitado)) return erro('Esse usuário já existe. Toque em Voltar e escolha Já tenho usuário.');
+    if (modoEntrada === 'novo' && digitado.includes(',')) return erro('Digite o nome, sem vírgulas.');
     const nome = cadastrado(digitado) || digitado;
     if (nome === estado.admin && /^\d{8}$/.test(pin)) {
       if (await resumoPin(nome, pin) !== estado.recuperacao) return erro('Código de recuperação incorreto.');
@@ -270,6 +304,11 @@
   }
   $('mUsuarios').onclick = () => { if (!souAdmin()) return; $('dMenu').close(); listaUsuarios(); editar(''); $('dAdm').showModal(); };
   $('aForm').onsubmit = e => { e.preventDefault(); salvarUsuario(); };
+  $('aExportar').onclick = () => {
+    if (!souAdmin()) return;
+    baixar('usuarios_conferencia_' + hoje() + '.json', C.arquivoUsuarios(estado), 'application/json');
+    $('aMsg').textContent = 'Arquivo salvo em Downloads.';
+  };
   $('aNovo').onclick = () => { editar(''); $('aNome').focus(); };
   $('aCodigo').onclick = () => { if (souAdmin() && confirm('Gerar um novo código? O anterior deixa de valer.')) novoCodigo(); };
   $('uCancelar').onclick = () => $('dUser').close();
