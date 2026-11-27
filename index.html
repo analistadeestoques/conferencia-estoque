@@ -75,6 +75,7 @@ dialog .row{margin:8px 0 0}
   <div class="row">
     <button id="bItens">Cadastrar itens</button>
     <button id="bSaldo">Saldo do sistema</button>
+    <button class="p" id="bExcel" style="background:#fff;color:var(--ac)">Importar Excel do sistema</button><input type="file" id="xFile" accept=".xlsx" hidden>
     <button id="bRel">Relatório</button>
     <span id="stat"></span>
   </div>
@@ -112,6 +113,7 @@ dialog .row{margin:8px 0 0}
   <div class="row"><button data-fechar>Fechar</button></div>
 </dialog>
 <script src="core.js"></script>
+<script src="xlsx.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

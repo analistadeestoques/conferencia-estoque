@@ -168,6 +168,24 @@
     salvar(); tudo();
   };
 
+  /* Excel "Posição de Estoque" */
+  $('bExcel').onclick = () => { $('xFile').value = ''; $('xFile').click(); };
+  $('xFile').onchange = async () => {
+    const f = $('xFile').files[0];
+    if (!f) return;
+    try {
+      const plan = await window.lerXlsx(await f.arrayBuffer());
+      /* Trabalha numa cópia: se algo falhar ou for cancelado, nada muda. */
+      const copia = JSON.parse(JSON.stringify(emp()));
+      const r = C.importarPosicao(copia, plan);
+      if (!confirm('Importar para “' + copia.nome + '”?\n\n' + r.total + ' itens na planilha\n' + r.atualizados + ' já cadastrados (contagens mantidas)\n' + r.novos + ' novos\n' + r.fora + ' do app que não estão na planilha (mantidos)')) return;
+      estado.empresas[estado.empresas.findIndex(e => e.id === copia.id)] = copia;
+      $('q').value = ''; $('filtro').value = '';
+      salvar(); tudo(); salvar();
+      alert('Pronto: ' + r.total + ' itens em ' + r.setores + ' famílias.');
+    } catch (e) { alert('Não foi possível importar. ' + e.message); }
+  };
+
   /* Relatório */
   const textoRel = () => { $('relX').value = C.relatorio(emp().nome, setor(), $('relD').checked); };
   $('bRel').onclick = () => { textoRel(); $('dRel').showModal(); };
