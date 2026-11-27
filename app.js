@@ -21,7 +21,8 @@
   }
   function converter() {
     const antes = JSON.stringify(estado);
-    if (!C.reorganizarPorFamilia(estado)) return;
+    const familias = C.reorganizarPorFamilia(estado), empresas = C.separarEmpresas(estado);
+    if (!familias && !empresas) return;
     /* Guarda uma cópia da organização anterior antes de gravar a nova. */
     try { localStorage.setItem(KEY + '-antes-familias', antes); } catch (e) { /* sem espaço: segue */ }
   }
@@ -35,7 +36,6 @@
   /* A categoria guarda "Hotel - Almoxarifado"; na tela, o filtro mostra só o local. */
   const COM_EMPRESA = /^(Hotel|A&B) - /;
   const localDe = c => (c || '').replace(COM_EMPRESA, '');
-  const empresaDe = c => (COM_EMPRESA.exec(c || '') || [])[1] || '';
   function opcoes(sel, lista, valor) {
     sel.replaceChildren(...lista.map(([v, t]) => { const o = el('option', '', t); o.value = v; return o; }));
     sel.value = valor;
@@ -66,7 +66,6 @@
     if (it.cod) titulo.append(el('span', 'cod', it.cod));
     titulo.append(el('span', 'desc', it.nome));
     if (it.un) titulo.append(el('span', 'un', it.un));
-    if (empresaDe(it.cat)) titulo.append(el('span', 'un', '(' + empresaDe(it.cat) + ')'));
     nm.append(titulo);
     const del = el('button', 'x del', 'Excluir item');
     del.onclick = () => {
@@ -188,11 +187,11 @@
     try {
       const plan = await window.lerXlsx(await f.arrayBuffer());
       /* Trabalha numa cópia: se algo falhar ou for cancelado, nada muda. */
-      const copia = JSON.parse(JSON.stringify(emp()));
-      const r = C.importarPosicao(copia, plan);
-      if (!confirm('Importar para “' + copia.nome + '”?\n\n' + r.total + ' itens na planilha\n' + r.atualizados + ' já cadastrados (contagens mantidas)\n' + r.novos + ' novos\n' + r.fora + ' do app que não estão na planilha (mantidos)'
+      const copia = JSON.parse(JSON.stringify(estado));
+      const r = C.importarExcel(copia, emp().id, plan);
+      if (!confirm('Importar para “' + r.destino + '”?\n\n' + r.total + ' itens na planilha\n' + r.atualizados + ' já cadastrados (contagens mantidas)\n' + r.novos + ' novos\n' + r.fora + ' do app que não estão na planilha (mantidos)'
         + (r.naoIdentificados.length ? '\n\nNÃO importados, empresa não identificada (' + r.naoIdentificados.length + '):\n' + r.naoIdentificados.slice(0, 10).join('\n') : ''))) return;
-      estado.empresas[estado.empresas.findIndex(e => e.id === copia.id)] = copia;
+      estado = copia;
       $('q').value = ''; $('filtro').value = '';
       salvar(); tudo(); salvar();
       alert('Pronto: saldo de ' + r.total + ' itens atualizado.');

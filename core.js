@@ -10,10 +10,82 @@
 
   const novoSetor = nome => ({ id: novoId(), nome, itens: [], cont: {}, sys: {}, obs: {}, resp: '', data: '', cego: false });
   const novaEmpresa = (nome, setores) => ({ id: novoId(), nome, setores: setores.map(novoSetor) });
+  const ORDEM = ['Portal A&B', 'Portal Beach', 'Shangrila', 'Status Motel', 'Diamond Motel'];
   function estadoInicial() {
     const cozinha = ['Cereais diversos', 'Frios e embutidos', 'Proteínas', 'Uso e consumo', 'Limpeza'];
-    const empresas = [novaEmpresa('Portal Beach', cozinha), novaEmpresa('Shangrila', cozinha), novaEmpresa('Motéis', ['Almoxarifado', 'PDV'])];
-    return { app: 'conferencia-estoque', v: 1, empresas, sel: { emp: empresas[0].id, set: empresas[0].setores[0].id } };
+    const motel = ['Almoxarifado', 'PDV'];
+    const empresas = [novaEmpresa('Portal A&B', ['Geral']), novaEmpresa('Portal Beach', cozinha), novaEmpresa('Shangrila', cozinha),
+      novaEmpresa('Status Motel', motel), novaEmpresa('Diamond Motel', motel)];
+    return { app: 'conferencia-estoque', v: 1, empresasSeparadas: true, empresas, sel: { emp: empresas[0].id, set: empresas[0].setores[0].id } };
+  }
+
+  /* Leva um item, com contagem, saldo e observação, para o setor de mesmo nome em outra empresa. */
+  function colocar(destino, origem, it) {
+    let d = destino.setores.find(s => s.nome === origem.nome);
+    if (!d) { d = Object.assign(novoSetor(origem.nome), { resp: origem.resp, data: origem.data, cego: origem.cego }); destino.setores.push(d); }
+    d.itens.push(it);
+    for (const k of ['cont', 'sys', 'obs']) if (origem[k][it.id] !== undefined) d[k][it.id] = origem[k][it.id];
+  }
+  const porNomeSetor = (x, y) => x.nome.localeCompare(y.nome, 'pt-BR');
+  /* Setores que só tinham itens de outra empresa somem; toda empresa fica com ao menos um. */
+  function arrumar(e) {
+    if (e.setores.some(s => s.itens.length)) e.setores = e.setores.filter(s => s.itens.length).sort(porNomeSetor);
+    if (!e.setores.length) e.setores = [novoSetor('Geral')];
+  }
+
+  /* Atualiza dados antigos: "Portal Beach" vira Portal Beach + Portal A&B; "Motéis" vira os dois motéis. */
+  function separarEmpresas(estado) {
+    if (estado.empresasSeparadas) return false;
+    const achar = n => estado.empresas.find(e => e.nome === n);
+    const pb = achar('Portal Beach');
+    let ab = achar('Portal A&B');
+    if (!ab) { ab = novaEmpresa('Portal A&B', []); estado.empresas.push(ab); }
+    if (pb) {
+      for (const s of [...pb.setores]) {
+        const sai = s.itens.filter(i => (i.cat || '').startsWith('A&B - '));
+        if (!sai.length) continue;
+        sai.forEach(it => colocar(ab, s, it));
+        const ids = new Set(sai.map(i => i.id));
+        s.itens = s.itens.filter(i => !ids.has(i.id));
+        for (const k of ['cont', 'sys', 'obs']) ids.forEach(id => delete s[k][id]);
+        if (!s.itens.length) pb.setores = pb.setores.filter(x => x !== s);
+      }
+      arrumar(pb);
+    }
+    arrumar(ab);
+    const moteis = achar('Motéis');
+    if (moteis && !moteis.setores.some(s => s.itens.length)) estado.empresas = estado.empresas.filter(e => e !== moteis);
+    for (const n of ['Status Motel', 'Diamond Motel']) if (!achar(n)) estado.empresas.push(novaEmpresa(n, ['Almoxarifado', 'PDV']));
+    const pos = e => { const i = ORDEM.indexOf(e.nome); return i < 0 ? ORDEM.length : i; };
+    estado.empresas.sort((x, y) => pos(x) - pos(y));
+    estado.empresasSeparadas = true;
+    return true;
+  }
+
+  /* A exportação do Portal traz Hotel e A&B juntos: junta as duas, importa e separa de novo. */
+  function importarExcel(estado, empresaId, linhasPlan) {
+    const atual = estado.empresas.find(e => e.id === empresaId);
+    const pb = estado.empresas.find(e => e.nome === 'Portal Beach'), ab = estado.empresas.find(e => e.nome === 'Portal A&B');
+    const doPortal = lerPosicao(linhasPlan).some(r => /^(Hotel|A&B) - /.test(r.cat));
+    if (!pb || !ab || !(doPortal || atual === pb || atual === ab)) return Object.assign(importarPosicao(atual, linhasPlan), { destino: atual.nome });
+
+    const junta = { nome: 'Portal', setores: [] }, eraAB = new Set();
+    for (const e of [pb, ab]) for (const s of e.setores) for (const it of s.itens) { colocar(junta, s, it); if (e === ab) eraAB.add(it.id); }
+    const r = importarPosicao(junta, linhasPlan);
+    const novoPB = { setores: [] }, novoAB = { setores: [] };
+    for (const s of junta.setores) for (const it of s.itens) {
+      const paraAB = (it.cat || '').startsWith('A&B - ') || (!(it.cat || '').startsWith('Hotel - ') && eraAB.has(it.id));
+      colocar(paraAB ? novoAB : novoPB, s, it);
+    }
+    for (const [e, novo] of [[pb, novoPB], [ab, novoAB]]) {
+      for (const s of novo.setores) {
+        const velho = e.setores.find(x => x.nome === s.nome);
+        Object.assign(s, velho ? { id: velho.id, resp: velho.resp, data: velho.data, cego: velho.cego } : { resp: '', data: '', cego: false });
+      }
+      e.setores = novo.setores;
+      arrumar(e);
+    }
+    return Object.assign(r, { destino: 'Portal Beach e Portal A&B' });
   }
 
   /* Saldo vindo do sistema/planilha: "1.500" é mil e quinhentos. */
@@ -299,6 +371,6 @@
     return o;
   }
 
-  const api = { novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
+  const api = { novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, separarEmpresas, importarExcel, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
   if (typeof module !== 'undefined') module.exports = api; else root.Core = api;
 })(this);
