@@ -47,7 +47,7 @@
     opcoes($('emp'), estado.empresas.map(x => [x.id, x.nome]), e.id);
     opcoes($('set'), e.setores.map(x => [x.id, x.nome]), s.id);
     const cats = [...new Set(s.itens.map(i => localDe(i.cat)).filter(Boolean))].sort();
-    opcoes($('cat'), [['', s.itens.some(i => empresaDe(i.cat)) ? 'Local de estoque' : 'Todas as categorias'], ...cats.map(c => [c, c])], cats.includes($('cat').value) ? $('cat').value : '');
+    opcoes($('cat'), [['', 'Local de estoque'], ...cats.map(c => [c, c])], cats.includes($('cat').value) ? $('cat').value : '');
     $('data').value = s.data; $('resp').value = s.resp; $('cego').checked = s.cego;
     if (s.cego && $('filtro').value === 'div') $('filtro').value = '';
     $('filtro').querySelector('[value=div]').disabled = s.cego;
