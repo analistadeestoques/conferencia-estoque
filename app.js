@@ -152,13 +152,48 @@
   const temPin = nome => !!(nome && estado.pins && estado.pins[nome]);
   async function resumoPin(nome, pin) {
     /* "sais" preserva o PIN de quem teve o nome corrigido. */
-    const sal = (estado.sais && estado.sais[nome]) || C.norm(nome);
+    return resumoSal((estado.sais && estado.sais[nome]) || C.norm(nome), pin);
+  }
+  async function resumoSal(sal, pin) {
     const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sal + ':' + pin));
     return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
   }
   /* Tela de entrada: '' = pergunta, 'ja' = já tenho usuário, 'novo' = cadastro novo. */
   let modoEntrada = '';
   const semUsuarios = () => !(estado.usuarios || []).length;
+  /* Servidor (script no Google). Endereço e chave ficam só neste aparelho, fora dos backups. */
+  const KSERV = KEY + '-servidor';
+  const servidor = () => { try { return JSON.parse(localStorage.getItem(KSERV)); } catch (e) { return null; } };
+  async function chamar(acao, dados, cfg) {
+    const c = cfg || servidor();
+    const corta = new AbortController(), t = setTimeout(() => corta.abort(), 30000);
+    let r;
+    try {
+      const res = await fetch(c.url, { method: 'POST', body: JSON.stringify(Object.assign({ acao, chave: c.chave }, dados)), signal: corta.signal });
+      r = await res.json();
+    } catch (e) {
+      throw Object.assign(new Error('Sem conexão com o Google.'), { semRede: true });
+    } finally { clearTimeout(t); }
+    if (!r || !r.ok) throw new Error((r && r.erro) || 'O Google não respondeu como esperado.');
+    return r;
+  }
+  let recPendente = '';
+  /* A lista do servidor vale para todos os aparelhos. */
+  function aplicarUsuarios(r) {
+    if (!r.usuarios || !r.usuarios.length) return;
+    for (const k of ['usuarios', 'pins', 'sais', 'admin', 'recuperacao']) estado[k] = r[k];
+    if (estado.usuario && !estado.usuarios.includes(estado.usuario)) {
+      estado.usuario = '';
+      try { sessionStorage.removeItem(SESSAO); } catch (e) { /* sem sessão */ }
+    }
+    salvar(); cabecalho();
+  }
+  async function sincronizar() {
+    if (!servidor() || recPendente) return;
+    try { aplicarUsuarios(await chamar('usuarios')); } catch (e) { return; }
+    if ($('dUser').open) { montarNomes(); $('uCancelar').hidden = !identificado(); } else if (!identificado()) pedirUsuario();
+  }
+
   function ajustarPin() {
     const n = cadastrado($('uNome').value), criar = modoEntrada === 'novo' || (!!n && !temPin(n));
     $('uPin').placeholder = criar ? 'Crie um PIN de 4 números' : 'Digite o seu PIN';
@@ -172,6 +207,7 @@
     const vazio = m === 'ja' && semUsuarios();
     $('uNome').value = $('uPin').value = $('uPin2').value = '';
     $('uEscolha').hidden = !!m;
+    $('uServ').hidden = !!servidor() || !semUsuarios();
     $('uCampos').hidden = !m || vazio;
     $('uEntrar').hidden = !m || vazio;
     $('uVoltar').hidden = !m;
@@ -181,18 +217,22 @@
     ajustarPin();
     if (vazio) $('uErro').textContent = 'Este aparelho ainda não tem usuários. Traga o arquivo de usuários salvo no outro aparelho, ou toque em Voltar e faça um Cadastro novo.';
   }
-  function pedirUsuario() {
-    if ($('dUser').open) return;
-    $('uCancelar').hidden = !identificado();
+  function montarNomes() {
     $('uLista').replaceChildren(...(estado.usuarios || []).map(n => {
       const b = el('button', '', n); b.type = 'button';
       b.onclick = () => { $('uNome').value = n; $('uPin').value = $('uPin2').value = ''; ajustarPin(); $('uPin').focus(); };
       return b;
     }));
+  }
+  function pedirUsuario() {
+    if ($('dUser').open) return;
+    $('uCancelar').hidden = !identificado();
+    recPendente = '';
+    montarNomes();
     mostrar('');
     $('dUser').showModal();
   }
-  $('uJa').onclick = () => mostrar('ja');
+  $('uJa').onclick = () => { mostrar('ja'); sincronizar(); };
   $('uNovo').onclick = () => { mostrar('novo'); $('uNome').focus(); };
   $('uVoltar').onclick = () => mostrar('');
   $('uTrazer').onclick = () => $('uArq').click();
@@ -211,22 +251,35 @@
     const erro = t => { $('uErro').textContent = t; };
     if (!modoEntrada) return;
     if (!digitado) return erro('Digite ou toque no seu nome.');
-    if (modoEntrada === 'ja' && !cadastrado(digitado)) return erro('Usuário não encontrado neste aparelho. Toque em Voltar e escolha Cadastro novo.');
     if (modoEntrada === 'novo' && cadastrado(digitado)) return erro('Esse usuário já existe. Toque em Voltar e escolha Já tenho usuário.');
     if (modoEntrada === 'novo' && digitado.includes(',')) return erro('Digite o nome, sem vírgulas.');
+    /* Usuário criado ou renomeado em outro aparelho: busca a lista antes de recusar. */
+    if (modoEntrada === 'ja' && !cadastrado(digitado) && servidor()) await sincronizar();
+    if (modoEntrada === 'ja' && !cadastrado(digitado)) return erro('Usuário não encontrado neste aparelho. Toque em Voltar e escolha Cadastro novo.');
     const nome = cadastrado(digitado) || digitado;
     if (nome === estado.admin && /^\d{8}$/.test(pin)) {
-      if (await resumoPin(nome, pin) !== estado.recuperacao) return erro('Código de recuperação incorreto.');
+      const rec = await resumoPin(nome, pin);
+      if (rec !== estado.recuperacao) return erro('Código de recuperação incorreto.');
+      if (servidor()) recPendente = rec;
       delete estado.pins[nome]; salvar();
       $('uPin').value = $('uPin2').value = ''; ajustarPin();
       return erro('Código aceito. Crie o novo PIN.');
     }
     if (!/^\d{4}$/.test(pin)) return erro('O PIN precisa ter 4 números.');
-    const hash = await resumoPin(nome, pin);
+    let hash = await resumoPin(nome, pin);
     if (temPin(nome)) {
+      /* PIN pode ter sido trocado em outro aparelho: confere a lista nova antes de recusar. */
+      if (estado.pins[nome] !== hash && servidor()) { await sincronizar(); hash = await resumoPin(nome, pin); }
       if (estado.pins[nome] !== hash) { $('uPin').value = ''; return erro('PIN incorreto. Peça ao administrador para trocar.'); }
     } else {
       if ($('uPin2').value !== pin) return erro('Os dois PINs precisam ser iguais.');
+      if (servidor()) {
+        try {
+          const r = recPendente ? await chamar('recuperar', { recuperacao: recPendente, hash })
+            : await chamar('cadastrar', { nome, hash: await resumoPin(nome, pin) });
+          recPendente = ''; aplicarUsuarios(r);
+        } catch (e) { return erro(e.semRede ? 'Para cadastrar ou trocar o PIN é preciso internet.' : e.message); }
+      }
       estado.pins = estado.pins || {}; estado.pins[nome] = hash;
     }
     estado.usuarios = estado.usuarios || [];
@@ -242,12 +295,18 @@
   const souAdmin = () => identificado() && !!estado.admin && estado.usuario === estado.admin;
   function ajustarMenu() {
     $('mSouAdm').hidden = !!estado.admin || !identificado();
+    $('mServ').hidden = !!estado.admin && !souAdmin();
     $('mUsuarios').hidden = !souAdmin();
     $('mAdmTxt').textContent = estado.admin ? 'Administrador: ' + estado.admin : 'Este aparelho ainda não tem administrador.';
   }
   async function novoCodigo() {
     const codigo = String(10000000 + crypto.getRandomValues(new Uint32Array(1))[0] % 90000000);
-    estado.recuperacao = await resumoPin(estado.admin, codigo); salvar();
+    const rec = await resumoPin(estado.admin, codigo);
+    if (servidor()) {
+      try { await chamar('codigo', { auth: estado.pins[estado.admin], recuperacao: rec }); }
+      catch (e) { return alert('O código não foi trocado. ' + e.message); }
+    }
+    estado.recuperacao = rec; salvar();
     alert('ANOTE E GUARDE o código de recuperação do administrador:\n\n' + codigo + '\n\nSe esquecer o PIN, digite esse código no lugar dele. Ele não será mostrado novamente.');
   }
   $('mSouAdm').onclick = async () => {
@@ -267,8 +326,12 @@
       d.append(el('span', '', n + (n === estado.admin ? ' (administrador)' : '')), ed);
       if (n !== estado.admin) {
         const x = el('button', 'x', 'Excluir'); x.type = 'button';
-        x.onclick = () => {
+        x.onclick = async () => {
           if (!confirm('Excluir o usuário “' + n + '”? As contagens já feitas continuam com o nome dele.')) return;
+          if (servidor()) {
+            try { await chamar('excluir', { auth: estado.pins[estado.admin], nome: n }); }
+            catch (e) { $('aMsg').textContent = e.message; return; }
+          }
           estado.usuarios = estado.usuarios.filter(u => u !== n);
           delete (estado.pins || {})[n]; delete (estado.sais || {})[n];
           salvar(); listaUsuarios(); editar('');
@@ -288,6 +351,14 @@
     if (pin && !/^\d{4}$/.test(pin)) return erro('O PIN precisa ter 4 números.');
     if (!antigo && !pin) return erro('Informe o PIN do novo usuário.');
     estado.usuarios = estado.usuarios || []; estado.pins = estado.pins || {}; estado.sais = estado.sais || {};
+    if (servidor()) {
+      /* O PIN é embaralhado com o mesmo "sal" que o usuário já tinha. */
+      const sal = antigo ? (estado.sais[antigo] || C.norm(antigo)) : C.norm(novo);
+      const hash = pin ? await resumoSal(sal, pin) : '';
+      try { await chamar('salvar', { auth: estado.pins[estado.admin], antigo, nome: novo, hash }); }
+      catch (e) { return erro(e.message); }
+      if (!antigo) estado.sais[novo] = sal;
+    }
     if (!antigo) estado.usuarios.push(novo);
     else if (antigo !== novo) {
       estado.sais[novo] = estado.sais[antigo] || C.norm(antigo); delete estado.sais[antigo];
@@ -399,6 +470,111 @@
   const arquivo = t => C.norm(t).replace(/[^a-z0-9]+/g, '-');
   $('relV').onclick = () => baixar('conferencia_' + arquivo(emp().nome) + '_' + arquivo(setor().nome) + '_' + setor().data + '.csv', '﻿' + C.csv(emp().nome, paraRelatorio()), 'text/csv');
 
+  /* Finalizar contagem: grava no Drive; sem internet, fica na fila. */
+  const KFILA = KEY + '-fila';
+  const lerFila = () => { try { return JSON.parse(localStorage.getItem(KFILA)) || []; } catch (e) { return []; } };
+  function mostrarPendentes() {
+    const n = lerFila().length;
+    $('bPend').hidden = !n;
+    $('bPend').textContent = '⏳ Enviar pendentes (' + n + ')';
+  }
+  let enviando = null;
+  function enviarFila() {
+    if (!enviando) enviando = (async () => {
+      let erro = null;
+      while (servidor()) {
+        const item = lerFila()[0];
+        if (!item) break;
+        try { await chamar('arquivo', item); } catch (e) { erro = e; break; }
+        localStorage.setItem(KFILA, JSON.stringify(lerFila().filter(x => x.id !== item.id)));
+        mostrarPendentes();
+      }
+      return erro;
+    })().finally(() => { enviando = null; mostrarPendentes(); });
+    return enviando;
+  }
+  const agora = () => new Date().toTimeString().slice(0, 8).replace(':', 'h').replace(':', '-');
+  const localAtual = () => $('cat').value;
+  const montar = () => C.finalizacao(estado, emp().id, $('fGrupo').value, localAtual(), estado.usuario, hoje(), agora());
+  function resumoFim() {
+    $('fMsg').textContent = '';
+    const r = montar().total;
+    const cego = emp().setores.some(s => s.cego && C.grupoDe(s.nome) === $('fGrupo').value);
+    $('fResumo').textContent = r.total + ' itens · ' + r.contados + ' contados · ' + r.nao_contado + ' não contados'
+      + (cego ? '' : ' · faltas: ' + r.falta + ' · sobras: ' + r.sobra);
+    $('fOk').disabled = !r.contados;
+    if (!r.contados) $('fMsg').textContent = r.total ? 'Nenhum item contado neste grupo.' : 'Este grupo não tem itens no local escolhido.';
+  }
+  $('bFim').onclick = () => {
+    if (!identificado()) return pedirUsuario();
+    const grupos = C.gruposDe(emp());
+    if (!grupos.length) return alert('Esta empresa ainda não tem itens.');
+    if (!servidor()) { alert('Primeiro conecte este aparelho ao Google.'); return abrirServidor(); }
+    const atual = C.grupoDe(setor().nome);
+    opcoes($('fGrupo'), grupos.map(g => [g, g.replace(/_/g, ' ')]), grupos.includes(atual) ? atual : grupos[0]);
+    $('fOnde').textContent = emp().nome + ' · ' + (localAtual() || 'todos os locais') + ' · ' + estado.usuario;
+    resumoFim();
+    $('dFim').showModal();
+  };
+  $('fGrupo').onchange = resumoFim;
+  $('fOk').onclick = async () => {
+    const f = montar();
+    try { localStorage.setItem(KFILA, JSON.stringify(lerFila().concat(f.pacote))); }
+    catch (e) { $('fMsg').textContent = 'Sem espaço no aparelho. Envie os pendentes antes.'; return; }
+    mostrarPendentes();
+    $('fOk').disabled = true; $('fMsg').textContent = 'Enviando…';
+    let erro = await enviarFila();
+    if (!erro && lerFila().some(x => x.id === f.pacote.id)) erro = await enviarFila();
+    $('fMsg').textContent = !erro ? '✔ Salvo no Drive. A contagem continua no aparelho.'
+      : erro.semRede ? 'Sem internet: ficou PENDENTE e será enviado quando a conexão voltar, com o app aberto.'
+      : 'Ficou PENDENTE. O Google recusou: ' + erro.message;
+  };
+  $('bPend').onclick = async () => {
+    const erro = await enviarFila();
+    alert(erro ? 'Ainda pendente. ' + erro.message : 'Pendentes enviados.');
+  };
+
+  /* Conexão com o Google */
+  function abrirServidor() {
+    const c = servidor();
+    $('sUrl').value = c ? c.url : ''; $('sChave').value = c ? c.chave : '';
+    $('sEstado').textContent = c ? 'Este aparelho está conectado.' : 'Informe o endereço do script e a chave de acesso.';
+    $('sSair').hidden = !c; $('sMsg').textContent = '';
+    $('dServ').showModal();
+  }
+  $('sForm').onsubmit = async e => {
+    e.preventDefault();
+    const cfg = { url: $('sUrl').value.trim(), chave: $('sChave').value.trim() };
+    const erro = t => { $('sMsg').textContent = t; };
+    if (!/^(https:\/\/script\.google\.com\/.+\/exec|http:\/\/localhost[:/].*)$/.test(cfg.url)) return erro('O endereço deve começar com https://script.google.com/ e terminar com /exec.');
+    if (!cfg.chave) return erro('Informe a chave de acesso.');
+    erro('Conectando…');
+    try {
+      let r = await chamar('usuarios', {}, cfg);
+      if (!r.usuarios.length) {
+        if (!estado.admin) return erro('O servidor ainda está vazio. Conecte primeiro o aparelho do administrador (Opções → Definir-me como administrador).');
+        if (!confirm('Enviar os usuários deste aparelho para o Google? “' + estado.admin + '” será o administrador de todos.')) return erro('');
+        r = await chamar('iniciar', { usuarios: estado.usuarios, pins: estado.pins, sais: estado.sais, admin: estado.admin, recuperacao: estado.recuperacao }, cfg);
+      } else if (!semUsuarios() && !confirm('Os usuários deste aparelho serão substituídos pelos do Google. Continuar?')) return erro('');
+      localStorage.setItem(KSERV, JSON.stringify(cfg));
+      aplicarUsuarios(r);
+    } catch (ex) { return erro(ex.message); }
+    $('dServ').close();
+    if ($('dUser').open) { montarNomes(); mostrar('ja'); } else if (!identificado()) pedirUsuario();
+    alert('Aparelho conectado.');
+    enviarFila();
+  };
+  $('sSair').onclick = () => {
+    if (lerFila().length) return alert('Há contagens pendentes. Envie-as antes de desconectar.');
+    if (!confirm('Desconectar este aparelho do Google?')) return;
+    localStorage.removeItem(KSERV); $('dServ').close();
+  };
+  $('uServ').onclick = abrirServidor;
+  $('mServ').onclick = () => { $('dMenu').close(); abrirServidor(); };
+  window.addEventListener('online', () => { enviarFila(); sincronizar(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { enviarFila(); sincronizar(); } });
+  setInterval(() => { if (lerFila().length && navigator.onLine) enviarFila(); }, 60000);
+
   /* Opções */
   const fechar = () => $('dMenu').close();
   const pedir = (msg, atual) => (prompt(msg, atual || '') || '').trim();
@@ -441,12 +617,13 @@
     let novo;
     try { novo = C.lerBackup(await f.text()); } catch (e) { return alert('Arquivo de backup inválido.'); }
     if (!confirm('Substituir TODOS os dados deste tablet pelo backup?')) return;
-    if (estado.admin) for (const k of ['usuarios', 'pins', 'sais', 'admin', 'recuperacao', 'usuario']) novo[k] = estado[k];
+    if (estado.admin || !novo.usuarios) for (const k of ['usuarios', 'pins', 'sais', 'admin', 'recuperacao', 'usuario']) novo[k] = estado[k];
     estado = novo; bloqueado = false; aviso(''); converter(); mudou();
   };
 
   tudo(); salvar();
   if (!identificado()) pedirUsuario();
+  mostrarPendentes(); enviarFila(); sincronizar();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(() => aviso('O modo sem internet não foi ativado. Abra de novo com internet.'));
   }

@@ -388,6 +388,47 @@
     return r;
   }
 
-  const api = { arquivoUsuarios, lerUsuarios, novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, separarEmpresas, importarExcel, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
+  /* Grupos de contagem no Drive: cada um junta famílias do sistema. */
+  const GRUPOS = {
+    BEBIDAS_E_PORCOES: ['bebidas alcoolicas', 'bebidas nao alcoolicas', 'cervejas', 'vinho e espumantes', 'vinhos e espumantes', 'doses', 'porcoes'],
+    PROTEINAS_FRIOS_E_EMBUTIDOS: ['proteinas', 'frios e embutidos', 'polpas'],
+    CEREAIS_E_DIVERSOS: ['cereais e diversos', 'cereais diversos'],
+    LIMPEZA_USO_E_CONSUMO: ['material de limpeza', 'limpeza', 'uso e consumo'],
+    ESCRITORIO_E_LAZER: ['escritorio e assemelhados', 'esporte e lazer'],
+    SOBREMESAS_E_PALETITAS: ['sobremesa', 'sobremesas', 'paletitas']
+  };
+  const nomeArq = t => norm(t).toUpperCase().replace(/[^A-Z0-9&]+/g, '_').replace(/^_+|_+$/g, '') || 'SEM_NOME';
+  /* Família fora da tabela vira um grupo com o próprio nome. */
+  const grupoDe = familia => Object.keys(GRUPOS).find(g => GRUPOS[g].includes(norm(familia))) || nomeArq(familia);
+  const gruposDe = empresa => [...new Set(empresa.setores.filter(s => s.itens.length).map(s => grupoDe(s.nome)))].sort();
+  const localItem = it => (it.cat || '').replace(/^(Hotel|A&B) - /, '');
+
+  const CHAVES_PRIVADAS = ['usuarios', 'pins', 'sais', 'admin', 'recuperacao', 'usuario'];
+  function backupSemPins(estado) {
+    const o = Object.assign({}, estado);
+    for (const k of CHAVES_PRIVADAS) delete o[k];
+    return JSON.stringify(o);
+  }
+  /* Monta o que vai para o Drive ao finalizar um grupo. local '' = todos. */
+  function finalizacao(estado, empresaId, grupo, local, usuario, data, hora) {
+    const empresa = estado.empresas.find(e => e.id === empresaId);
+    const setores = empresa.setores.filter(s => grupoDe(s.nome) === grupo)
+      .map(s => Object.assign({}, s, { itens: s.itens.filter(i => !local || localItem(i) === local), data, resp: s.resp || usuario }))
+      .filter(s => s.itens.length);
+    const total = { total: 0, contados: 0, nao_contado: 0, sem_saldo: 0, ok: 0, sobra: 0, falta: 0 };
+    for (const s of setores) { const r = resumo(s); for (const k in total) total[k] += r[k]; }
+    const linhas = setores.flatMap((s, i) => csv(empresa.nome, s).split('\r\n').slice(i ? 1 : 0));
+    const pasta = nomeArq(empresa.nome);
+    const nome = [data, hora, local ? nomeArq(local) : 'TODOS_LOCAIS', pasta, grupo, nomeArq(usuario)].join('_');
+    return {
+      total,
+      pacote: { id: nome, empresa: pasta, grupo, ano: data.slice(0, 4), arquivos: [
+        { nome: nome + '.csv', conteudo: '\ufeff' + linhas.join('\r\n') },
+        { nome: nome + '_backup.json', conteudo: backupSemPins(estado) }
+      ] }
+    };
+  }
+
+  const api = { grupoDe, gruposDe, nomeArq, backupSemPins, finalizacao, arquivoUsuarios, lerUsuarios, novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, separarEmpresas, importarExcel, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
   if (typeof module !== 'undefined') module.exports = api; else root.Core = api;
 })(this);

@@ -26,7 +26,7 @@ header select{flex:1;min-width:150px;width:0}
 .quem{font-size:14px}
 .nomes{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 #uNome,.pin{width:100%;margin-bottom:8px}
-#uErro,#aMsg{color:var(--falta);font-weight:600}
+#uErro,#aMsg,#sMsg,#fMsg{color:var(--falta);font-weight:600}
 .usu{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)}
 .usu span{flex:1;min-width:140px;font-weight:600}
 #aviso{display:none;background:var(--falta);color:#fff;padding:8px 12px;font-weight:600}
@@ -85,6 +85,8 @@ dialog .row{margin:8px 0 0}
     <button id="bSaldo">Saldo do sistema</button>
     <button class="p" id="bExcel" style="background:#fff;color:var(--ac)">Importar Excel do sistema</button><input type="file" id="xFile" accept=".xlsx" hidden>
     <button id="bRel">Relatório</button>
+    <button id="bFim" style="background:#fff;color:var(--ac)">✔ Finalizar contagem</button>
+    <button id="bPend" hidden></button>
     <span id="stat"></span>
   </div>
 </header>
@@ -95,7 +97,7 @@ dialog .row{margin:8px 0 0}
     <h3>Quem vai fazer a contagem?</h3>
     <div id="uEscolha">
       <p>Você já tem um usuário?</p>
-      <div class="row"><button type="button" class="p" id="uJa">Já tenho usuário</button><button type="button" id="uNovo">Cadastro novo</button></div>
+      <div class="row"><button type="button" class="p" id="uJa">Já tenho usuário</button><button type="button" id="uNovo">Cadastro novo</button><button type="button" id="uServ">Conectar ao Google</button></div>
     </div>
     <div id="uCampos">
     <p id="uTexto"></p>
@@ -119,6 +121,26 @@ dialog .row{margin:8px 0 0}
     <div id="aMsg" role="alert"></div>
     <div class="row"><button class="p" type="submit">Salvar</button><button type="button" id="aNovo">Novo usuário</button><button type="button" id="aCodigo">Novo código de recuperação</button><button type="button" id="aExportar">Salvar arquivo de usuários</button><button type="button" data-fechar>Fechar</button></div>
   </form>
+</dialog>
+
+<dialog id="dServ">
+  <h3>Conectar ao Google</h3>
+  <p id="sEstado"></p>
+  <form id="sForm">
+    <input id="sUrl" class="pin" type="url" placeholder="Endereço do script (https://script.google.com/…/exec)" autocomplete="off">
+    <input id="sChave" class="pin" type="password" placeholder="Chave de acesso" autocomplete="off">
+    <div id="sMsg" role="alert"></div>
+    <div class="row"><button class="p" type="submit" id="sOk">Conectar</button><button type="button" class="x" id="sSair">Desconectar este aparelho</button><button type="button" data-fechar>Fechar</button></div>
+  </form>
+</dialog>
+
+<dialog id="dFim">
+  <h3>Finalizar contagem</h3>
+  <p id="fOnde"></p>
+  <label>Grupo <select id="fGrupo"></select></label>
+  <p id="fResumo"></p>
+  <div id="fMsg" role="alert"></div>
+  <div class="row"><button class="p" id="fOk">Salvar no Drive</button><button data-fechar>Fechar</button></div>
 </dialog>
 
 <dialog id="dImp">
@@ -150,7 +172,7 @@ dialog .row{margin:8px 0 0}
   <p>Apaga a lista de itens do setor selecionado.</p>
   <div class="row"><button class="x" id="mLimpar">Excluir todos os itens do setor</button></div>
   <div id="mAdmBox"><p id="mAdmTxt"></p>
-  <div class="row"><button id="mSouAdm">Definir-me como administrador</button><button class="p" id="mUsuarios">Cadastro de usuários</button></div></div>
+  <div class="row"><button id="mSouAdm">Definir-me como administrador</button><button class="p" id="mUsuarios">Cadastro de usuários</button><button id="mServ">Conectar ao Google</button></div></div>
   <p>Backup de todas as empresas. Guarde o arquivo fora do tablet de vez em quando.</p>
   <div class="row"><button class="p" id="mBk">Baixar backup</button><button id="mRs">Restaurar backup</button><input type="file" id="mFile" accept=".json" hidden></div>
   <div class="row"><button data-fechar>Fechar</button></div>
