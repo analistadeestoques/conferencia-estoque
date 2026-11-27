@@ -1,0 +1,23 @@
+CONFERÊNCIA DE ESTOQUE - COMO INSTALAR
+
+1. Publicar (uma vez, de preferência no computador)
+   - Crie uma conta gratuita em github.com
+   - Crie um repositório PÚBLICO chamado conferencia-estoque
+   - Use "Add file > Upload files", envie TODOS os arquivos desta pasta (soltos, sem subpasta) e confirme em "Commit changes"
+   - Vá em Settings > Pages. Em "Build and deployment", escolha "Deploy from a branch", branch main, pasta / (root), e clique em Save
+   - Aguarde alguns minutos. O endereço aparece nessa mesma tela
+
+2. Instalar no tablet (com internet)
+   - Abra o endereço no Chrome
+   - Menu (três pontos) > "Instalar app" ou "Adicionar à tela inicial"
+   - Abra pelo ícone uma vez, ainda com internet
+
+3. Testar antes de usar de verdade
+   - Ative o modo avião, abra o app, conte alguns itens
+   - Feche tudo, reinicie o tablet e veja se os números continuam lá
+
+CUIDADOS
+- Não coloque planilhas, saldos ou backups no GitHub: o repositório é público.
+- Limpar os "dados do site" no Chrome apaga as contagens. Baixe backups em Opções.
+- Cada tablet guarda os próprios dados; eles não se juntam sozinhos.
+- Ao publicar uma versão nova, mude o número em sw.js (conferencia-v1, v2...) e abra o app com internet duas vezes.
