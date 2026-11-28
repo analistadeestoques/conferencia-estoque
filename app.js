@@ -169,7 +169,8 @@
     /* Atalho do dia a dia: só no aparelho do administrador conectado. */
     $('bImpConf').hidden = !souAdmin() || !servidor();
     $('data').textContent = hoje().split('-').reverse().join('/');
-    $('resp').textContent = estado.usuario || '—';
+    /* Antes de entrar, nenhum nome aparece. */
+    $('resp').textContent = (identificado() && estado.usuario) || '—';
   }
   /* Senha: evita contar no nome de outra pessoa por engano. Não é segurança forte. */
   const cadastrado = nome => (estado.usuarios || []).find(n => C.norm(n) === C.norm(nome));
