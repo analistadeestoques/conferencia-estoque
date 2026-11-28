@@ -66,6 +66,32 @@ dialog .row{margin:8px 0 0}
 #cMsg{color:var(--falta);font-weight:600}
 #cAcoes label{display:flex;gap:8px;align-items:center;margin-top:8px}
 #cAcoes input{min-height:0;width:20px;height:20px}
+.fim{margin-left:auto}
+@media (max-width:520px){header .quem{display:block}}
+#bFiltros.ativo{background:#ffe9c7;border-color:#ffe9c7}
+footer{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--card);border-top:1px solid var(--bd);padding:10px 12px}
+footer .row{justify-content:center}
+footer #bFim{flex:1;min-height:54px;font-size:17px}
+main{padding-bottom:100px}
+#dMenu{width:min(1040px,96vw)}
+.topo{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.topo h3{flex:1;margin:0}
+.grade{columns:3 280px;column-gap:16px}
+.grupo{break-inside:avoid;margin:0 0 14px}
+.grupo h4{margin:0 0 6px 4px;font-size:13px;color:var(--mut)}
+.cartao{border:1px solid var(--bd);border-radius:14px;overflow:hidden}
+button.opc{display:grid;grid-template-columns:34px 1fr 12px;column-gap:10px;row-gap:2px;align-content:center;align-items:center;width:100%;text-align:left;border:0;border-bottom:1px solid var(--bd);border-radius:0;padding:10px 14px;min-height:58px}
+button.opc:last-child{border-bottom:0}
+button.opc svg{grid-row:1/3;width:34px;height:34px;padding:7px;box-sizing:border-box;border-radius:9px;background:#e3f0f8;fill:none;stroke:#005a8c;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+button.opc::after{content:"›";grid-column:3;grid-row:1/3;color:var(--mut);font-size:20px}
+button.opc b,button.opc small{grid-column:2}
+button.opc.x svg{background:#fbeadf;stroke:#a34700}
+button.opc b{font-size:15px;color:#005a8c}
+button.opc small{font-weight:400;font-size:13px;color:var(--mut)}
+button.opc.x b{color:#a34700}
+.lin{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--bd)}
+.lin:last-child{border-bottom:0}
+.lin span{flex:1;min-width:150px;font-weight:600;overflow-wrap:anywhere}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -73,36 +99,34 @@ dialog .row{margin:8px 0 0}
 <div id="aviso"></div>
 <header>
   <div class="row">
-    <select id="emp" aria-label="Empresa"></select>
-    <select id="cat" aria-label="Local de estoque"></select>
-    <select id="set" aria-label="Setor"></select>
-    <button id="bMenu">⚙ Opções</button>
+    <div><span class="quem">Data: <b id="data"></b></span> <span class="quem">Responsável: <b id="resp"></b></span></div>
+    <button id="bTrocar">Trocar</button>
+    <button id="bMenu" class="fim">☰ Menu</button>
   </div>
   <div class="row">
-    <span class="quem">Data: <b id="data"></b></span>
-    <span class="quem">Responsável: <b id="resp"></b></span>
-    <button id="bTrocar">Trocar</button>
-    <label><input type="checkbox" id="cego"> Contagem cega</label>
+    <select id="emp" aria-label="Empresa"></select>
+    <select id="set" aria-label="Setor"></select>
   </div>
   <div class="row">
     <input id="q" type="search" placeholder="Buscar item ou código…">
+    <button id="bFiltros" aria-expanded="false" aria-controls="painelF">Filtros</button>
+  </div>
+  <div class="row" id="painelF" hidden>
+    <select id="cat" aria-label="Local de estoque"></select>
     <select id="filtro" aria-label="Situação">
       <option value="">Todos</option><option value="nao_contado">Não contados</option><option value="div">Divergências</option><option value="recont" hidden>Recontagem pedida</option>
     </select>
+    <label><input type="checkbox" id="cego"> Contagem cega</label>
   </div>
   <div class="row">
-    <button id="bItens">Cadastrar itens</button>
-    <button id="bSaldo">Saldo do sistema</button>
-    <button class="p" id="bExcel" style="background:#fff;color:var(--ac)">Importar Excel do sistema</button><input type="file" id="xFile" accept=".xlsx" hidden>
-    <button id="bRel">Relatório</button>
-    <button id="bFim" style="background:#fff;color:var(--ac)">✔ Finalizar contagem</button>
-    <button id="bPend" hidden></button>
     <span id="stat"></span>
     <span class="quem" id="listaInfo"></span>
     <button id="bRecont" hidden></button>
   </div>
 </header>
 <main id="lista"></main>
+<footer><div class="row"><button class="p" id="bFim">✔ Finalizar contagem</button><button id="bPend" hidden></button></div></footer>
+<input type="file" id="xFile" accept=".xlsx" hidden>
 
 <dialog id="dUser">
   <form id="uForm">
@@ -187,21 +211,34 @@ dialog .row{margin:8px 0 0}
 </dialog>
 
 <dialog id="dMenu">
-  <h3>Opções</h3>
-  <p>Empresa e setor selecionados</p>
-  <div class="row"><button id="mNovoSetor">Novo setor</button><button id="mRenSetor">Renomear setor</button><button class="x" id="mDelSetor">Excluir setor</button></div>
-  <div class="row"><button id="mNovaEmp">Nova empresa</button><button id="mRenEmp">Renomear empresa</button><button class="x" id="mDelEmp">Excluir empresa</button></div>
-  <p>Zera contagens, saldo e observações deste setor. A lista de itens fica.</p>
-  <div class="row"><button class="x" id="mNova">Nova conferência</button></div>
-  <p>Novo inventário: zera saldos, contagens e observações de TODAS as famílias da empresa selecionada. Os itens ficam. Um backup é baixado antes.</p>
-  <div class="row"><button class="x" id="mZerar">Zerar saldos</button></div>
-  <p>Apaga a lista de itens do setor selecionado.</p>
-  <div class="row"><button class="x" id="mLimpar">Excluir todos os itens do setor</button></div>
-  <div id="mAdmBox"><p id="mAdmTxt"></p>
-  <div class="row"><button id="mSouAdm">Definir-me como administrador</button><button class="p" id="mUsuarios">Cadastro de usuários</button><button id="mServ">Conectar ao Google</button><button id="mLink">🔗 Enviar link de conexão</button><button id="mLista">📤 Enviar lista de itens</button><button class="p" id="mComp">📊 Conferir contagens</button></div></div>
-  <p>Backup de todas as empresas. Guarde o arquivo fora do tablet de vez em quando.</p>
-  <div class="row"><button class="p" id="mBk">Baixar backup</button><button id="mRs">Restaurar backup</button><input type="file" id="mFile" accept=".json" hidden></div>
-  <div class="row"><button data-fechar>Fechar</button></div>
+  <div class="topo"><h3>Menu</h3><button data-fechar>Fechar</button></div>
+  <div class="grade">
+<section class="grupo" id="gItens"><h4>Itens e saldo</h4><div class="cartao"><button type="button" class="opc" id="bExcel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><b>Importar Excel do sistema</b><small>Traz itens, saldo e custo de uma vez</small></button>
+<button type="button" class="opc" id="bItens"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg><b>Cadastrar itens</b><small>Colar uma lista de itens no setor aberto</small></button>
+<button type="button" class="opc" id="bSaldo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9zM9 5H6v16h12V5h-3M9 12h6M9 16h6"/></svg><b>Saldo do sistema</b><small>Colar código e quantidade no setor aberto</small></button></div></section>
+<section class="grupo" id="gRel"><h4>Relatórios</h4><div class="cartao"><button type="button" class="opc" id="mComp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M5 7h14M5 7l-3 7h6zM19 7l-3 7h6zM8 20h8"/></svg><b>Conferir contagens</b><small>Faltas, sobras, recontagem e Excel</small></button>
+<button type="button" class="opc" id="bRel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg><b>Relatório do setor</b><small>Copiar, compartilhar ou baixar</small></button></div></section>
+<section class="grupo" id="gCad"><h4>Cadastros</h4><div class="cartao"><button type="button" class="opc" id="mSetores"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z"/></svg><b>Setores</b><small>Criar, renomear ou excluir</small></button>
+<button type="button" class="opc" id="mEmpresas"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V3h10v18M15 9h5v12M3 21h18M8 7h4M8 11h4M8 15h4"/></svg><b>Empresas</b><small>Criar, renomear ou excluir</small></button></div></section>
+<section class="grupo" id="gInv"><h4>Inventário</h4><div class="cartao"><button type="button" class="opc" id="mNova"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-3-6.200M17 2v4h4"/></svg><b>Nova conferência</b><small>Você escolhe o setor que será zerado</small></button>
+<button type="button" class="opc x" id="mZerar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 14h8l1-14"/></svg><b>Zerar saldos</b><small>Você escolhe a empresa. Baixa um backup antes</small></button></div></section>
+<section class="grupo" id="gAp"><h4>Aparelhos e usuários</h4><div class="cartao"><button type="button" class="opc" id="mSouAdm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6zM9 12l2 2 4-4"/></svg><b>Definir-me como administrador</b><small>Libera o cadastro de usuários</small></button>
+<button type="button" class="opc" id="mLink"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></svg><b>Enviar link de conexão</b><small>Para ligar outro celular ou tablet</small></button>
+<button type="button" class="opc" id="mLista"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></svg><b>Enviar lista de itens</b><small>Os aparelhos recebem sem o saldo</small></button>
+<button type="button" class="opc" id="mUsuarios"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21c0-4 3-7 7-7s7 3 7 7M17 4a4 4 0 0 1 0 7M18 14c3 1 4 3 4 7"/></svg><b>Cadastro de usuários</b><small>Criar usuários e trocar PIN</small></button>
+<button type="button" class="opc" id="mServ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 19h11a4 4 0 0 0 0-8 6 6 0 0 0-12-1 4.500 4.500 0 0 0 1 9z"/></svg><b>Conectar ao Google</b><small>Endereço e chave do script</small></button></div></section>
+<section class="grupo" id="gSeg"><h4>Segurança dos dados</h4><div class="cartao"><button type="button" class="opc" id="mBk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h13l3 3v13H4zM8 4v5h7V4M8 20v-6h8v6"/></svg><b>Baixar backup</b><small>Guarde o arquivo fora do aparelho</small></button>
+<button type="button" class="opc" id="mRs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 3-6.200M7 2v4H3M12 8v4l3 2"/></svg><b>Restaurar backup</b><small>Substitui os dados deste aparelho</small></button></div></section>
+  </div>
+  <p id="mAdmTxt"></p>
+  <input type="file" id="mFile" accept=".json" hidden>
+</dialog>
+
+<dialog id="dLista">
+  <div class="topo"><button id="lVoltar">‹ Voltar</button><h3 id="lTitulo"></h3><button data-fechar>Fechar</button></div>
+  <p id="lTxt"></p>
+  <div class="row"><button class="p" id="lNovo"></button></div>
+  <div class="cartao" id="lItens"></div>
 </dialog>
 <script src="core.js"></script>
 <script src="xlsx.js"></script>

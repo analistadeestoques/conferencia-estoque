@@ -18,10 +18,10 @@ CONFERÊNCIA DE ESTOQUE - COMO INSTALAR
 
 CUIDADOS
 - Não coloque planilhas, saldos ou backups no GitHub: o repositório é público.
-- Limpar os "dados do site" no Chrome apaga as contagens. Baixe backups em Opções.
+- Limpar os "dados do site" no Chrome apaga as contagens. Baixe backups no Menu.
 - Cada tablet guarda os próprios dados; eles não se juntam sozinhos.
 - Ao publicar uma versão nova, mude o número em sw.js (conferencia-v1, v2...) e abra o app com internet duas vezes.
 
 LINK DE CONEXÃO
-No aparelho do administrador já conectado: Opções > Enviar link de conexão.
+No aparelho do administrador já conectado: Menu > Enviar link de conexão.
 No aparelho novo, abra o link uma vez no Chrome. O link leva a chave: mande só para quem vai usar.

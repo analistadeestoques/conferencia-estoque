@@ -12,12 +12,12 @@
   } catch (e) {
     /* Não sobrescreve dados que não conseguimos ler. */
     bloqueado = true; estado = C.estadoInicial();
-    aviso('Não consegui ler os dados salvos. Nada será gravado. Restaure um backup em Opções.');
+    aviso('Não consegui ler os dados salvos. Nada será gravado. Restaure um backup no Menu.');
   }
   function salvar() {
     if (bloqueado) return;
     try { localStorage.setItem(KEY, JSON.stringify(estado)); }
-    catch (e) { aviso('ATENÇÃO: o tablet não conseguiu salvar. Baixe um backup agora (Opções).'); }
+    catch (e) { aviso('ATENÇÃO: o tablet não conseguiu salvar. Baixe um backup agora (Menu).'); }
     agendarLista();
   }
   function converter() {
@@ -132,10 +132,11 @@
     itens.forEach(it => { const g = localDe(it.cat) || 'Sem categoria'; if (!grupos.has(g)) grupos.set(g, []); grupos.get(g).push(it); });
     const nos = [];
     grupos.forEach((g, nome) => { nos.push(el('h2', '', nome)); g.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).forEach(it => nos.push(linha(it))); });
-    if (!nos.length) nos.push(el('div', 'vazio', s.itens.length ? 'Nenhum item com esses filtros.' : 'Este setor ainda não tem itens. Toque em “Cadastrar itens” e cole a sua lista.'));
+    if (!nos.length) nos.push(el('div', 'vazio', s.itens.length ? 'Nenhum item com esses filtros.' : 'Este setor ainda não tem itens. Toque em Menu → Cadastrar itens e cole a sua lista.'));
     $('lista').replaceChildren(...nos);
     status();
     avisos();
+    marcarFiltros();
   }
 
   /* Data da lista recebida e recontagem pedida pelo administrador. */
@@ -322,12 +323,15 @@
   function ajustarMenu() {
     $('mSouAdm').hidden = !!estado.admin || !identificado();
     $('mServ').hidden = !!estado.admin && !souAdmin();
-    $('mServ').textContent = servidor() ? '✔ Conectado ao Google' : 'Conectar ao Google';
+    $('mServ').querySelector('b').textContent = servidor() ? '✔ Conectado ao Google' : 'Conectar ao Google';
     $('mLink').hidden = !souAdmin();
     $('mLista').hidden = !souAdmin() || !servidor();
     $('mComp').hidden = !souAdmin() || !servidor();
     $('mUsuarios').hidden = !souAdmin();
     $('mAdmTxt').textContent = estado.admin ? 'Administrador: ' + estado.admin : 'Este aparelho ainda não tem administrador.';
+    /* Quem só conta vê apenas relatório e backup. */
+    const restrito = !!estado.admin && !souAdmin();
+    for (const id of ['gItens', 'gCad', 'gInv', 'gAp']) $(id).hidden = restrito;
   }
   async function novoCodigo() {
     const codigo = String(10000000 + crypto.getRandomValues(new Uint32Array(1))[0] % 90000000);
@@ -423,6 +427,13 @@
   const paraRelatorio = () => { const s = setor(); s.data = hoje(); return Object.assign({}, s, { resp: s.resp || estado.usuario || '' }); };
   $('cego').onchange = () => { setor().cego = $('cego').checked; salvar(); tudo(); };
   $('q').oninput = $('cat').onchange = $('filtro').onchange = lista;
+  $('bFiltros').onclick = () => { $('painelF').hidden = !$('painelF').hidden; $('bFiltros').setAttribute('aria-expanded', !$('painelF').hidden); };
+  /* Botão destacado quando algum filtro está escondendo itens. */
+  function marcarFiltros() {
+    const n = [$('cat').value, $('filtro').value, setor().cego].filter(Boolean).length;
+    $('bFiltros').textContent = n ? 'Filtros (' + n + ')' : 'Filtros';
+    $('bFiltros').classList.toggle('ativo', !!n);
+  }
 
   /* Importação */
   let modo = '';
@@ -436,8 +447,8 @@
     $('impX').value = ''; $('impF').value = ''; $('impR').checked = false; $('dres').textContent = '';
     $('dImp').showModal();
   }
-  $('bItens').onclick = () => abrirImp('itens');
-  $('bSaldo').onclick = () => abrirImp('saldo');
+  $('bItens').onclick = () => { $('dMenu').close(); abrirImp('itens'); };
+  $('bSaldo').onclick = () => { $('dMenu').close(); abrirImp('saldo'); };
   $('impF').onchange = async () => {
     const f = $('impF').files[0];
     if (!f) return;
@@ -464,7 +475,7 @@
   };
 
   /* Excel "Posição de Estoque" */
-  $('bExcel').onclick = () => { $('xFile').value = ''; $('xFile').click(); };
+  $('bExcel').onclick = () => { $('dMenu').close(); $('xFile').value = ''; $('xFile').click(); };
   $('xFile').onchange = async () => {
     const f = $('xFile').files[0];
     if (!f) return;
@@ -484,7 +495,7 @@
 
   /* Relatório */
   const textoRel = () => { $('relX').value = C.relatorio(emp().nome, paraRelatorio(), $('relD').checked); };
-  $('bRel').onclick = () => { textoRel(); $('dRel').showModal(); };
+  $('bRel').onclick = () => { $('dMenu').close(); textoRel(); $('dRel').showModal(); };
   $('relD').onchange = textoRel;
   $('relC').onclick = async () => {
     try { await navigator.clipboard.writeText($('relX').value); }
@@ -652,7 +663,7 @@
   async function conectar(cfg) {
     let r = await chamar('usuarios', {}, cfg);
     if (!r.usuarios.length) {
-      if (!estado.admin) throw new Error('O servidor ainda está vazio. Conecte primeiro o aparelho do administrador (Opções → Definir-me como administrador).');
+      if (!estado.admin) throw new Error('O servidor ainda está vazio. Conecte primeiro o aparelho do administrador (Menu → Definir-me como administrador).');
       if (!confirm('Enviar os usuários deste aparelho para o Google? “' + estado.admin + '” será o administrador de todos.')) return false;
       r = await chamar('iniciar', { usuarios: estado.usuarios, pins: estado.pins, sais: estado.sais, admin: estado.admin, recuperacao: estado.recuperacao }, cfg);
     } else if (!semUsuarios() && !confirm('Os usuários deste aparelho serão substituídos pelos do Google. Continuar?')) return false;
@@ -661,7 +672,7 @@
     $('dServ').close();
     if ($('dUser').open) { montarNomes(); mostrar('ja'); } else if (!identificado()) pedirUsuario();
     await sincronizarLista();
-    alert(souAdmin() ? 'Aparelho conectado. Para ligar os outros: Opções → Enviar link de conexão.' : 'Aparelho conectado.');
+    alert(souAdmin() ? 'Aparelho conectado. Para ligar os outros: Menu → Enviar link de conexão.' : 'Aparelho conectado.');
     enviarFila();
     return true;
   }
@@ -715,40 +726,76 @@
   /* O que a tela de conferência das contagens usa. */
   window.App = { emp, chamar, souAdmin, hoje, agora, baixar, avisos, auth: () => estado.pins[estado.admin], infoLista, gravarInfo };
 
-  /* Opções */
+  /* Menu */
   const fechar = () => $('dMenu').close();
   const pedir = (msg, atual) => (prompt(msg, atual || '') || '').trim();
-  const mudou = () => { salvar(); tudo(); salvar(); fechar(); };
+  const gravar = () => { salvar(); tudo(); salvar(); };
+  const mudou = () => { gravar(); fechar(); };
   $('bMenu').onclick = () => { ajustarMenu(); $('dMenu').showModal(); };
-  $('mNovoSetor').onclick = () => { const n = pedir('Nome do novo setor'); if (!n) return; const s = C.novoSetor(n); emp().setores.push(s); estado.sel.set = s.id; mudou(); };
-  $('mRenSetor').onclick = () => { const n = pedir('Novo nome do setor', setor().nome); if (n) { setor().nome = n; mudou(); } };
-  $('mDelSetor').onclick = () => {
-    if (emp().setores.length < 2) return alert('A empresa precisa de pelo menos um setor.');
-    if (confirm('Excluir o setor “' + setor().nome + '” com itens e contagens?')) { const id = setor().id; emp().setores = emp().setores.filter(s => s.id !== id); mudou(); }
+
+  /* Listas: a pessoa escolhe em qual setor ou empresa mexer, sem precisar abri-lo antes. */
+  const zerarSetor = s => { s.cont = {}; s.sys = {}; s.obs = {}; s.resp = ''; s.data = hoje(); };
+  const itensDe = n => n + (n === 1 ? ' item' : ' itens');
+  const renomear = (alvo, msg) => { const n = pedir(msg, alvo.nome); if (n) alvo.nome = n; return !!n; };
+  const TELAS = {
+    setores: {
+      titulo: () => 'Setores — ' + emp().nome, novo: '+ Novo setor',
+      criar: () => { const n = pedir('Nome do novo setor'); if (!n) return false; const s = C.novoSetor(n); emp().setores.push(s); estado.sel.set = s.id; return true; },
+      linhas: () => emp().setores.map(s => [s.nome + ' · ' + itensDe(s.itens.length), [
+        ['Renomear', () => renomear(s, 'Novo nome do setor')],
+        ['Excluir itens', () => { if (!confirm('Excluir TODOS os ' + s.itens.length + ' itens de “' + emp().nome + ' / ' + s.nome + '”, com contagens e saldos?')) return false; s.itens = []; zerarSetor(s); return true; }, 'x'],
+        ['Excluir setor', () => {
+          if (emp().setores.length < 2) { alert('A empresa precisa de pelo menos um setor.'); return false; }
+          if (!confirm('Excluir o setor “' + s.nome + '” com itens e contagens?')) return false;
+          emp().setores = emp().setores.filter(x => x !== s); return true; }, 'x']]])
+    },
+    empresas: {
+      titulo: () => 'Empresas', novo: '+ Nova empresa',
+      criar: () => { const n = pedir('Nome da nova empresa'); if (!n) return false; const e = C.novaEmpresa(n, ['Geral']); estado.empresas.push(e); estado.sel = { emp: e.id, set: e.setores[0].id }; return true; },
+      linhas: () => estado.empresas.map(e => [e.nome, [
+        ['Renomear', () => renomear(e, 'Novo nome da empresa')],
+        ['Excluir', () => {
+          if (estado.empresas.length < 2) { alert('É preciso manter pelo menos uma empresa.'); return false; }
+          if (!confirm('Excluir a empresa “' + e.nome + '” com todos os setores?')) return false;
+          estado.empresas = estado.empresas.filter(x => x !== e); return true; }, 'x']]])
+    },
+    nova: {
+      titulo: () => 'Nova conferência — ' + emp().nome, txt: 'Escolha o setor. Zera contagens, saldo e observações; os itens ficam.',
+      linhas: () => emp().setores.map(s => [s.nome, [['Zerar', () => { if (!confirm('Zerar contagens, saldo e observações de “' + s.nome + '”?')) return false; zerarSetor(s); return true; }, 'x']]])
+    },
+    zerar: {
+      titulo: () => 'Zerar saldos', txt: 'Escolha a empresa. Zera saldos, contagens e observações de todas as famílias dela. Um backup é baixado antes.',
+      linhas: () => estado.empresas.map(e => [e.nome, [['Zerar saldos', () => {
+        if (!confirm('Zerar saldos, contagens e observações de TODAS as famílias de “' + e.nome + '”?')) return false;
+        baixar('backup_antes_de_zerar_' + hoje() + '.json', C.backup(estado), 'application/json');
+        e.setores.forEach(zerarSetor); $('filtro').value = ''; return true; }, 'x']]])
+    }
   };
-  $('mNovaEmp').onclick = () => { const n = pedir('Nome da nova empresa'); if (!n) return; const e = C.novaEmpresa(n, ['Geral']); estado.empresas.push(e); estado.sel = { emp: e.id, set: e.setores[0].id }; mudou(); };
-  $('mRenEmp').onclick = () => { const n = pedir('Novo nome da empresa', emp().nome); if (n) { emp().nome = n; mudou(); } };
-  $('mDelEmp').onclick = () => {
-    if (estado.empresas.length < 2) return alert('É preciso manter pelo menos uma empresa.');
-    if (confirm('Excluir a empresa “' + emp().nome + '” com todos os setores?')) { const id = emp().id; estado.empresas = estado.empresas.filter(e => e.id !== id); mudou(); }
-  };
-  $('mNova').onclick = () => {
-    if (!confirm('Zerar contagens, saldo e observações de “' + setor().nome + '”?')) return;
-    const s = setor(); s.cont = {}; s.sys = {}; s.obs = {}; s.resp = ''; s.data = hoje(); mudou();
-  };
-  $('mZerar').onclick = () => {
-    const e = emp();
-    if (!confirm('Zerar saldos, contagens e observações de TODAS as famílias de “' + e.nome + '”?')) return;
-    baixar('backup_antes_de_zerar_' + hoje() + '.json', C.backup(estado), 'application/json');
-    for (const s of e.setores) { s.cont = {}; s.sys = {}; s.obs = {}; s.resp = ''; s.data = hoje(); }
-    $('filtro').value = '';
-    mudou();
-  };
-  $('mLimpar').onclick = () => {
-    const s = setor();
-    if (!confirm('Excluir TODOS os ' + s.itens.length + ' itens de “' + emp().nome + ' / ' + s.nome + '”, com contagens e saldos?')) return;
-    s.itens = []; s.cont = {}; s.sys = {}; s.obs = {}; s.resp = ''; mudou();
-  };
+  let tela = '';
+  function mostrarLista() {
+    const t = TELAS[tela];
+    $('lTitulo').textContent = t.titulo();
+    $('lTxt').textContent = t.txt || '';
+    $('lNovo').hidden = !t.novo; $('lNovo').textContent = t.novo || '';
+    $('lItens').replaceChildren(...t.linhas().map(([nome, acoes]) => {
+      const lin = el('div', 'lin');
+      lin.append(el('span', '', nome));
+      for (const [rotulo, fazer, cls] of acoes) {
+        const bt = el('button', cls || '', rotulo);
+        bt.type = 'button';
+        bt.onclick = () => { if (fazer()) { gravar(); mostrarLista(); } };
+        lin.append(bt);
+      }
+      return lin;
+    }));
+  }
+  const abrirTela = nome => { fechar(); tela = nome; mostrarLista(); $('dLista').showModal(); };
+  $('mSetores').onclick = () => abrirTela('setores');
+  $('mEmpresas').onclick = () => abrirTela('empresas');
+  $('mNova').onclick = () => abrirTela('nova');
+  $('mZerar').onclick = () => abrirTela('zerar');
+  $('lNovo').onclick = () => { if (TELAS[tela].criar()) { gravar(); mostrarLista(); } };
+  $('lVoltar').onclick = () => { $('dLista').close(); $('bMenu').onclick(); };
   $('mBk').onclick = () => baixar('backup_conferencia_' + hoje() + '.json', C.backup(estado), 'application/json');
   $('mRs').onclick = () => { $('mFile').value = ''; $('mFile').click(); };
   $('mFile').onchange = async () => {

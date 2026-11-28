@@ -80,7 +80,7 @@
   $('cRecontar').onclick = async () => {
     const itens = atual ? K.paraRecontar(atual) : [];
     if (!itens.length) return msg('Não há divergências para recontar.');
-    if (!A.infoLista().origem) return msg('Antes, envie a lista de itens deste computador (Opções → Enviar lista de itens).');
+    if (!A.infoLista().origem) return msg('Antes, envie a lista de itens deste computador (Menu → Enviar lista de itens).');
     if (!confirm('Pedir recontagem de ' + itens.length + ' itens? Nos outros aparelhos, a contagem anterior desses itens é apagada.')) return;
     if (await recontagem(itens)) msg('Recontagem pedida. Os aparelhos recebem ao abrir o app com internet. Depois, busque as contagens de novo.');
   };
