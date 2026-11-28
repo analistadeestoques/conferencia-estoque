@@ -165,6 +165,8 @@
   const identificado = () => { try { return sessionStorage.getItem(SESSAO) === hoje() && !!estado.usuario; } catch (e) { return false; } };
   function cabecalho() {
     setor().data = hoje();
+    /* Atalho do dia a dia: só no aparelho do administrador conectado. */
+    $('bImpConf').hidden = !souAdmin() || !servidor();
     $('data').textContent = hoje().split('-').reverse().join('/');
     $('resp').textContent = estado.usuario || '—';
   }
@@ -491,7 +493,10 @@
   };
 
   /* Excel "Posição de Estoque" */
-  $('bExcel').onclick = () => { $('dMenu').close(); $('xFile').value = ''; $('xFile').click(); };
+  let conferirDepois = false;
+  const escolherExcel = conferir => { conferirDepois = conferir; $('xFile').value = ''; $('xFile').click(); };
+  $('bExcel').onclick = () => { $('dMenu').close(); escolherExcel(false); };
+  $('bImpConf').onclick = () => escolherExcel(true);
   $('xFile').onchange = async () => {
     const f = $('xFile').files[0];
     if (!f) return;
@@ -500,12 +505,18 @@
       /* Trabalha numa cópia: se algo falhar ou for cancelado, nada muda. */
       const copia = JSON.parse(JSON.stringify(estado));
       const r = C.importarExcel(copia, emp().id, plan);
-      if (!confirm('Importar para “' + r.destino + '”?\n\n' + r.total + ' itens na planilha\n' + r.atualizados + ' já cadastrados (contagens mantidas)\n' + r.novos + ' novos\n' + r.fora + ' do app que não estão na planilha (mantidos)'
+      /* No atalho só pergunta se algum item ficaria de fora. */
+      if ((!conferirDepois || r.naoIdentificados.length) && !confirm('Importar para “' + r.destino + '”?\n\n' + r.total + ' itens na planilha\n' + r.atualizados + ' já cadastrados (contagens mantidas)\n' + r.novos + ' novos\n' + r.fora + ' do app que não estão na planilha (mantidos)'
         + (r.naoIdentificados.length ? '\n\nNÃO importados, empresa não identificada (' + r.naoIdentificados.length + '):\n' + r.naoIdentificados.slice(0, 10).join('\n') : ''))) return;
       estado = copia;
       $('q').value = ''; $('filtro').value = '';
       salvar(); tudo(); salvar();
-      alert('Pronto: saldo de ' + r.total + ' itens atualizado.');
+      const resumo = 'Saldo atualizado: ' + r.total + (r.total === 1 ? ' item' : ' itens') + (r.novos ? ' (' + r.novos + (r.novos === 1 ? ' novo)' : ' novos)') : '') + '.';
+      if (!conferirDepois) return alert('Pronto. ' + resumo);
+      /* Arquivo do Portal importado com outra empresa aberta: mostra o Portal. */
+      const portal = estado.empresas.filter(e => e.nome === 'Portal Beach' || e.nome === 'Portal A&B');
+      if (r.destino === 'Portal Beach e Portal A&B' && !portal.includes(emp())) { estado.sel = { emp: (portal.find(e => e.nome === 'Portal Beach') || portal[0]).id, set: '' }; salvar(); tudo(); salvar(); }
+      window.Conferir.abrirEBuscar(resumo);
     } catch (e) { alert('Não foi possível importar. ' + e.message); }
   };
 
@@ -738,7 +749,7 @@
   $('sSair').onclick = () => {
     if (lerFila().length) return alert('Há contagens pendentes. Envie-as antes de desconectar.');
     if (!confirm('Desconectar este aparelho do Google?')) return;
-    localStorage.removeItem(KSERV); $('dServ').close();
+    localStorage.removeItem(KSERV); $('dServ').close(); cabecalho();
   };
   $('uServ').onclick = abrirServidor;
   $('mServ').onclick = () => { $('dMenu').close(); abrirServidor(); };
@@ -747,7 +758,7 @@
   setInterval(() => { if (lerFila().length && navigator.onLine) enviarFila(); }, 60000);
 
   /* O que a tela de conferência das contagens usa. */
-  window.App = { emp, chamar, souAdmin, hoje, agora, baixar, avisos, auth: () => estado.pins[estado.admin], infoLista, gravarInfo };
+  window.App = { emp, empresas: () => estado.empresas, chamar, souAdmin, hoje, agora, baixar, avisos, auth: () => estado.pins[estado.admin], infoLista, gravarInfo };
 
   /* Menu */
   const fechar = () => $('dMenu').close();

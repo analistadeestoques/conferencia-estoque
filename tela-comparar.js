@@ -6,7 +6,8 @@
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
   const reais = n => n === null ? '' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const num = n => n === null ? '' : C.fmt(n);
-  let atual = null, empresaNome = '';
+  let atual = null, empresaNome = '', pedido = 0;
+  const empresa = () => A.empresas().find(e => e.nome === empresaNome) || A.emp();
   const msg = t => { $('cMsg').textContent = t; };
   const pasta = () => C.nomeArq(empresaNome);
   const pedir = (acao, dados) => A.chamar(acao, Object.assign({ auth: A.auth(), empresa: pasta() }, dados));
@@ -36,12 +37,14 @@
   async function buscar() {
     const data = $('cData').value;
     if (!data) return msg('Escolha a data.');
+    const vez = ++pedido;
     msg('Buscando…'); atual = null; $('cAcoes').hidden = true; $('cResumo').textContent = ''; $('cTabela').replaceChildren();
     try {
       const resposta = await pedir('contagens', { data });
       const contagens = resposta.arquivos.map(t => { try { return JSON.parse(t); } catch (e) { return null; } }).filter(Boolean);
       const lista = await A.chamar('lista', { versao: A.infoLista().versao || '' });
-      const r = K.comparar(A.emp(), contagens, { data, pedido: (lista.recontagens || {})[pasta()] });
+      if (vez !== pedido) return; /* a pessoa já trocou de empresa ou de data */
+      const r = K.comparar(empresa(), contagens, { data, pedido: (lista.recontagens || {})[pasta()] });
       if (!r.enviadas) return msg('Nenhuma contagem enviada nesta data para ' + empresaNome + '. Confira se o aparelho usou “Finalizar contagem” e não ficou pendente.');
       atual = r; msg('');
       const s = r.resumo;
@@ -49,20 +52,31 @@
         + ' · conflitos ' + s.conflito + ' · não contados ' + s.nao_contado + (s.sem_saldo ? ' · sem saldo ' + s.sem_saldo : '') + (r.fora.length ? ' · fora do cadastro ' + r.fora.length : '');
       $('cAcoes').hidden = false;
       mostrar();
-    } catch (e) { falhou(e); }
+    } catch (e) { if (vez === pedido) falhou(e); }
   }
 
+  function limpar() { pedido++; atual = null; msg(''); $('cResumo').textContent = ''; $('cAcoes').hidden = true; $('cTabela').replaceChildren(); }
+  function escolherEmpresa(nome) {
+    empresaNome = nome; $('cEmp').value = nome;
+    $('cTitulo').textContent = 'Conferir contagens — ' + nome;
+    limpar();
+  }
+  function abrir(aviso) {
+    $('cEmp').replaceChildren(...A.empresas().map(e => el('option', '', e.nome)));
+    escolherEmpresa(A.emp().nome);
+    $('cImp').textContent = aviso || '';
+    $('cData').value = A.hoje(); $('cMes').value = A.hoje().slice(0, 7);
+    $('dComp').showModal();
+  }
+  window.Conferir = { abrirEBuscar: aviso => { abrir(aviso); buscar(); } };
   $('mComp').onclick = () => {
     if (!A.souAdmin()) return;
     $('dMenu').close();
-    empresaNome = A.emp().nome; atual = null;
-    $('cTitulo').textContent = 'Conferir contagens — ' + empresaNome;
-    $('cData').value = A.hoje(); $('cMes').value = A.hoje().slice(0, 7);
-    msg(''); $('cResumo').textContent = ''; $('cAcoes').hidden = true; $('cTabela').replaceChildren();
-    $('dComp').showModal();
+    abrir('');
   };
   $('cBuscar').onclick = buscar;
-  $('cData').onchange = () => { atual = null; $('cAcoes').hidden = true; $('cResumo').textContent = ''; $('cTabela').replaceChildren(); msg(''); };
+  $('cEmp').onchange = () => { escolherEmpresa($('cEmp').value); $('cImp').textContent = ''; buscar(); };
+  $('cData').onchange = limpar;
   $('cTodos').onchange = mostrar;
 
   $('cExcel').onclick = () => atual && A.baixar('conferencia_' + pasta() + '_' + atual.data + '.xlsx', window.gerarXlsx(K.planilha(empresaNome, atual)),

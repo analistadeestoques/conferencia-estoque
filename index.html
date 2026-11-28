@@ -76,6 +76,7 @@ dialog .row{margin:8px 0 0}
 footer{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--card);border-top:1px solid var(--bd);padding:10px 12px}
 footer .row{justify-content:center}
 footer #bFim{flex:1;min-height:54px;font-size:17px}
+footer #bImpConf{min-height:54px;font-weight:700;color:#005a8c;border-color:#0072B2}
 main{padding-bottom:100px}
 #dMenu{width:min(1040px,96vw)}
 .topo{display:flex;align-items:center;gap:10px;margin-bottom:8px}
@@ -129,7 +130,7 @@ button.opc.x b{color:#a34700}
   </div>
 </header>
 <main id="lista"></main>
-<footer><div class="row"><button class="p" id="bFim">✔ Finalizar contagem</button><button id="bPend" hidden></button></div></footer>
+<footer><div class="row"><button id="bImpConf" hidden>⇪ Importar e conferir</button><button class="p" id="bFim">✔ Finalizar contagem</button><button id="bPend" hidden></button></div></footer>
 <input type="file" id="xFile" accept=".xlsx" hidden>
 
 <dialog id="dUser">
@@ -188,7 +189,9 @@ button.opc.x b{color:#a34700}
 
 <dialog id="dComp">
   <h3 id="cTitulo">Conferir contagens</h3>
-  <p>Importe antes o Excel do sistema do dia: a comparação usa o saldo que está neste computador.</p>
+  <p id="cImp" role="status"></p>
+  <p>A comparação usa o último saldo importado neste computador.</p>
+  <div class="row"><label>Empresa <select id="cEmp"></select></label></div>
   <div class="row"><label>Data da contagem <input type="date" id="cData"></label><button class="p" id="cBuscar">Buscar contagens</button></div>
   <div id="cMsg" role="alert"></div>
   <p id="cResumo"></p>
