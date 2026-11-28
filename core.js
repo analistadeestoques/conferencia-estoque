@@ -429,6 +429,19 @@
     };
   }
 
-  const api = { grupoDe, gruposDe, nomeArq, backupSemPins, finalizacao, arquivoUsuarios, lerUsuarios, novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, separarEmpresas, importarExcel, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
+  /* Link de conexão (endereço do script + chave, depois do "#"). */
+  const enderecoValido = u => /^(https:\/\/script\.google\.com\/.+\/exec|http:\/\/localhost[:/].*)$/.test(u);
+  function linkConexao(base, cfg) {
+    const t = btoa(JSON.stringify({ u: cfg.url, c: cfg.chave })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return base + '#conectar=' + t;
+  }
+  function lerLink(hash) {
+    try {
+      const d = JSON.parse(atob(String(hash).replace(/^#conectar=/, '').replace(/-/g, '+').replace(/_/g, '/')));
+      return typeof d.u === 'string' && typeof d.c === 'string' && d.c && enderecoValido(d.u) ? { url: d.u, chave: d.c } : null;
+    } catch (e) { return null; }
+  }
+
+  const api = { enderecoValido, linkConexao, lerLink, grupoDe, gruposDe, nomeArq, backupSemPins, finalizacao, arquivoUsuarios, lerUsuarios, novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, separarEmpresas, importarExcel, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
   if (typeof module !== 'undefined') module.exports = api; else root.Core = api;
 })(this);

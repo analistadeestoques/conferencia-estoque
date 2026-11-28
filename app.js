@@ -214,6 +214,8 @@
     $('uTrazer').hidden = !vazio;
     $('uLista').hidden = m !== 'ja';
     $('uTexto').textContent = m === 'novo' ? 'Digite o seu nome e crie um PIN.' : 'Toque no seu nome e digite o PIN.';
+    /* Quem usou o aparelho por último já vem preenchido. */
+    if (m === 'ja' && ultimo()) $('uNome').value = ultimo();
     ajustarPin();
     if (vazio) $('uErro').textContent = 'Este aparelho ainda não tem usuários. Traga o arquivo de usuários salvo no outro aparelho, ou toque em Voltar e faça um Cadastro novo.';
   }
@@ -224,13 +226,16 @@
       return b;
     }));
   }
+  const KULTIMO = KEY + '-ultimo';
+  const ultimo = () => cadastrado(localStorage.getItem(KULTIMO) || '') || '';
   function pedirUsuario() {
     if ($('dUser').open) return;
     $('uCancelar').hidden = !identificado();
     recPendente = '';
     montarNomes();
-    mostrar('');
+    mostrar(ultimo() ? 'ja' : '');
     $('dUser').showModal();
+    if (ultimo()) $('uPin').focus();
   }
   $('uJa').onclick = () => { mostrar('ja'); sincronizar(); };
   $('uNovo').onclick = () => { mostrar('novo'); $('uNome').focus(); };
@@ -285,6 +290,7 @@
     estado.usuarios = estado.usuarios || [];
     if (!estado.usuarios.includes(nome)) estado.usuarios.push(nome);
     estado.usuario = nome;
+    try { localStorage.setItem(KULTIMO, nome); } catch (e) { /* só deixa de lembrar */ }
     try { sessionStorage.setItem(SESSAO, hoje()); } catch (e) { /* pergunta de novo depois */ }
     salvar(); cabecalho(); $('dUser').close();
   }
@@ -540,30 +546,60 @@
     $('sUrl').value = c ? c.url : ''; $('sChave').value = c ? c.chave : '';
     $('sEstado').textContent = c ? 'Este aparelho está conectado.' : 'Informe o endereço do script e a chave de acesso.';
     $('sSair').hidden = !c; $('sMsg').textContent = '';
+    $('sLink').hidden = !c || !souAdmin();
     $('dServ').showModal();
+  }
+  /* Devolve false se a pessoa desistir; lança erro se não der para conectar. */
+  async function conectar(cfg) {
+    let r = await chamar('usuarios', {}, cfg);
+    if (!r.usuarios.length) {
+      if (!estado.admin) throw new Error('O servidor ainda está vazio. Conecte primeiro o aparelho do administrador (Opções → Definir-me como administrador).');
+      if (!confirm('Enviar os usuários deste aparelho para o Google? “' + estado.admin + '” será o administrador de todos.')) return false;
+      r = await chamar('iniciar', { usuarios: estado.usuarios, pins: estado.pins, sais: estado.sais, admin: estado.admin, recuperacao: estado.recuperacao }, cfg);
+    } else if (!semUsuarios() && !confirm('Os usuários deste aparelho serão substituídos pelos do Google. Continuar?')) return false;
+    localStorage.setItem(KSERV, JSON.stringify(cfg));
+    aplicarUsuarios(r);
+    $('dServ').close();
+    if ($('dUser').open) { montarNomes(); mostrar('ja'); } else if (!identificado()) pedirUsuario();
+    alert('Aparelho conectado.');
+    enviarFila();
+    return true;
   }
   $('sForm').onsubmit = async e => {
     e.preventDefault();
     const cfg = { url: $('sUrl').value.trim(), chave: $('sChave').value.trim() };
     const erro = t => { $('sMsg').textContent = t; };
-    if (!/^(https:\/\/script\.google\.com\/.+\/exec|http:\/\/localhost[:/].*)$/.test(cfg.url)) return erro('O endereço deve começar com https://script.google.com/ e terminar com /exec.');
+    if (!C.enderecoValido(cfg.url)) return erro('O endereço deve começar com https://script.google.com/ e terminar com /exec.');
     if (!cfg.chave) return erro('Informe a chave de acesso.');
     erro('Conectando…');
-    try {
-      let r = await chamar('usuarios', {}, cfg);
-      if (!r.usuarios.length) {
-        if (!estado.admin) return erro('O servidor ainda está vazio. Conecte primeiro o aparelho do administrador (Opções → Definir-me como administrador).');
-        if (!confirm('Enviar os usuários deste aparelho para o Google? “' + estado.admin + '” será o administrador de todos.')) return erro('');
-        r = await chamar('iniciar', { usuarios: estado.usuarios, pins: estado.pins, sais: estado.sais, admin: estado.admin, recuperacao: estado.recuperacao }, cfg);
-      } else if (!semUsuarios() && !confirm('Os usuários deste aparelho serão substituídos pelos do Google. Continuar?')) return erro('');
-      localStorage.setItem(KSERV, JSON.stringify(cfg));
-      aplicarUsuarios(r);
-    } catch (ex) { return erro(ex.message); }
-    $('dServ').close();
-    if ($('dUser').open) { montarNomes(); mostrar('ja'); } else if (!identificado()) pedirUsuario();
-    alert('Aparelho conectado.');
-    enviarFila();
+    try { if (!await conectar(cfg)) erro(''); } catch (ex) { erro(ex.message); }
   };
+  /* Link de conexão: o endereço e a chave vão depois do "#", que não é enviado ao GitHub. */
+  $('sLink').onclick = async () => {
+    const c = servidor();
+    if (!c) return;
+    const url = C.linkConexao(location.origin + location.pathname, c);
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Conectar a Conferência de Estoque', url }); return; }
+      catch (e) { if (e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(url); $('sMsg').textContent = 'Link copiado. Mande só para quem vai usar.'; }
+    catch (e) { prompt('Copie o link e mande só para quem vai usar:', url); }
+  };
+  async function abrirLink() {
+    if (!location.hash.startsWith('#conectar=')) return;
+    const cfg = C.lerLink(location.hash);
+    history.replaceState(null, '', location.pathname + location.search); // tira a chave da barra de endereço
+    if (!cfg) return alert('Link de conexão inválido. Peça outro ao administrador.');
+    const atual = servidor();
+    if (atual && atual.url === cfg.url && atual.chave === cfg.chave) return alert('Este aparelho já está conectado.');
+    if (atual && lerFila().length) return alert('Há contagens pendentes. Envie-as antes de abrir o link de novo.');
+    if (!confirm(atual ? 'ATENÇÃO: este aparelho já está conectado, com outro endereço ou chave. Trocar? Só aceite se o link veio do seu administrador.'
+      : 'Conectar este aparelho ao Google? Só aceite se o link veio do seu administrador.')) return;
+    try { await conectar(cfg); }
+    catch (e) { alert('Não foi possível conectar. ' + (e.semRede ? 'Verifique a internet e abra o link de novo.' : e.message)); }
+  }
+  window.addEventListener('hashchange', abrirLink);
   $('sSair').onclick = () => {
     if (lerFila().length) return alert('Há contagens pendentes. Envie-as antes de desconectar.');
     if (!confirm('Desconectar este aparelho do Google?')) return;
@@ -623,7 +659,7 @@
 
   tudo(); salvar();
   if (!identificado()) pedirUsuario();
-  mostrarPendentes(); enviarFila(); sincronizar();
+  mostrarPendentes(); enviarFila(); sincronizar(); abrirLink();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(() => aviso('O modo sem internet não foi ativado. Abra de novo com internet.'));
   }
