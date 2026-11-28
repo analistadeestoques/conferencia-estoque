@@ -302,6 +302,8 @@
   function ajustarMenu() {
     $('mSouAdm').hidden = !!estado.admin || !identificado();
     $('mServ').hidden = !!estado.admin && !souAdmin();
+    $('mServ').textContent = servidor() ? '✔ Conectado ao Google' : 'Conectar ao Google';
+    $('mLink').hidden = !souAdmin();
     $('mUsuarios').hidden = !souAdmin();
     $('mAdmTxt').textContent = estado.admin ? 'Administrador: ' + estado.admin : 'Este aparelho ainda não tem administrador.';
   }
@@ -546,7 +548,6 @@
     $('sUrl').value = c ? c.url : ''; $('sChave').value = c ? c.chave : '';
     $('sEstado').textContent = c ? 'Este aparelho está conectado.' : 'Informe o endereço do script e a chave de acesso.';
     $('sSair').hidden = !c; $('sMsg').textContent = '';
-    $('sLink').hidden = !c || !souAdmin();
     $('dServ').showModal();
   }
   /* Devolve false se a pessoa desistir; lança erro se não der para conectar. */
@@ -561,7 +562,7 @@
     aplicarUsuarios(r);
     $('dServ').close();
     if ($('dUser').open) { montarNomes(); mostrar('ja'); } else if (!identificado()) pedirUsuario();
-    alert('Aparelho conectado.');
+    alert(souAdmin() ? 'Aparelho conectado. Para ligar os outros: Opções → Enviar link de conexão.' : 'Aparelho conectado.');
     enviarFila();
     return true;
   }
@@ -575,15 +576,16 @@
     try { if (!await conectar(cfg)) erro(''); } catch (ex) { erro(ex.message); }
   };
   /* Link de conexão: o endereço e a chave vão depois do "#", que não é enviado ao GitHub. */
-  $('sLink').onclick = async () => {
+  $('mLink').onclick = async () => {
     const c = servidor();
-    if (!c) return;
+    $('dMenu').close();
+    if (!c) { abrirServidor(); $('sMsg').textContent = 'Para enviar o link, primeiro conecte este aparelho: informe o endereço e a chave.'; return; }
     const url = C.linkConexao(location.origin + location.pathname, c);
     if (navigator.share) {
       try { await navigator.share({ title: 'Conectar a Conferência de Estoque', url }); return; }
       catch (e) { if (e.name === 'AbortError') return; }
     }
-    try { await navigator.clipboard.writeText(url); $('sMsg').textContent = 'Link copiado. Mande só para quem vai usar.'; }
+    try { await navigator.clipboard.writeText(url); alert('Link copiado. Cole e mande só para quem vai usar.'); }
     catch (e) { prompt('Copie o link e mande só para quem vai usar:', url); }
   };
   async function abrirLink() {

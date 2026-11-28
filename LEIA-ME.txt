@@ -23,5 +23,5 @@ CUIDADOS
 - Ao publicar uma versão nova, mude o número em sw.js (conferencia-v1, v2...) e abra o app com internet duas vezes.
 
 LINK DE CONEXÃO
-No aparelho do administrador já conectado: Opções > Conectar ao Google > Enviar link de conexão.
+No aparelho do administrador já conectado: Opções > Enviar link de conexão.
 No aparelho novo, abra o link uma vez no Chrome. O link leva a chave: mande só para quem vai usar.
