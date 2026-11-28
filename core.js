@@ -190,7 +190,7 @@
     const cab = linhasPlan[h].map(norm);
     const achaCol = nome => cab.findIndex(c => c.startsWith(nome));
     const col = nome => { const i = achaCol(nome); if (i < 0) throw new Error('Falta a coluna “' + nome + '” na exportação.'); return i; };
-    const c = { cod: col('codigo do produto'), nome: col('descricao do produto'), un: achaCol('unidade'), qtd: col('quantidade'), fam: col('familia'), emp: achaCol('minha empresa'), local: col('local de estoque') };
+    const c = { cod: col('codigo do produto'), nome: col('descricao do produto'), un: achaCol('unidade'), qtd: col('quantidade'), fam: col('familia'), custo: achaCol('cmc'), emp: achaCol('minha empresa'), local: col('local de estoque') };
     const mapa = new Map();
     for (const l of linhasPlan.slice(h + 1)) {
       const t = i => String(l[i] === undefined ? '' : l[i]).trim();
@@ -199,6 +199,8 @@
       const empresa = t(c.emp).toUpperCase(), familia = t(c.fam).toUpperCase();
       const r = { cod: t(c.cod), nome: t(c.nome), un: t(c.un), q: arred(q), setor: FAMILIAS[familia] || inicial(familia || 'Sem família'),
         local: inicial(t(c.local)), cat: empresa ? (EMPRESAS[empresa] || t(c.emp)) + ' - ' + inicial(t(c.local)) : '' };
+      const custo = typeof l[c.custo] === 'number' ? l[c.custo] : numSistema(t(c.custo));
+      if (custo > 0) r.custo = custo;
       const k = (r.cat || r.local) + '|' + chaveCod(r.cod);
       if (mapa.has(k)) mapa.get(k).q = arred(mapa.get(k).q + r.q); else mapa.set(k, r);
     }
@@ -266,7 +268,10 @@
     for (const { r, a } of pares) {
       const s = pegar(r.setor), id = a ? a.it.id : novoId();
       if (a) { mover(a, s); atualizados++; } else novos++;
-      s.itens.push({ id, cod: r.cod, nome: r.nome, un: r.un || (a ? a.it.un : ''), cat: r.cat });
+      const novo = { id, cod: r.cod, nome: r.nome, un: r.un || (a ? a.it.un : ''), cat: r.cat };
+      const custo = r.custo || (a && a.it.custo);
+      if (custo) novo.custo = custo;
+      s.itens.push(novo);
       s.sys[id] = r.q;
     }
     /* O que não veio na exportação permanece, com o saldo que tinha. */
@@ -493,6 +498,6 @@
     } catch (e) { return null; }
   }
 
-  const api = { listaItens, contarItens, aplicarLista, enderecoValido, linkConexao, lerLink, grupoDe, gruposDe, nomeArq, backupSemPins, finalizacao, arquivoUsuarios, lerUsuarios, novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, separarEmpresas, importarExcel, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
+  const api = { chaveCod, arred, localItem, listaItens, contarItens, aplicarLista, enderecoValido, linkConexao, lerLink, grupoDe, gruposDe, nomeArq, backupSemPins, finalizacao, arquivoUsuarios, lerUsuarios, novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, separarEmpresas, importarExcel, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
   if (typeof module !== 'undefined') module.exports = api; else root.Core = api;
 })(this);

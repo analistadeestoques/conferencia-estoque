@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const C = window.Core, KEY = 'conferencia-estoque-v1';
+  const C = window.Core, K = window.Comparar, KEY = 'conferencia-estoque-v1';
   const $ = id => document.getElementById(id);
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
   const aviso = t => { $('aviso').textContent = t; $('aviso').style.display = t ? 'block' : 'none'; };
@@ -125,6 +125,7 @@
       if (q && !C.norm(it.nome + ' ' + it.cod).includes(q)) return false;
       if (cat && localDe(it.cat) !== cat) return false;
       const t = C.situacao(s, it).tipo;
+      if (f === 'recont') return pedidas().includes(K.chave(it));
       return !f || (f === 'div' ? t === 'falta' || t === 'sobra' : t === f);
     });
     const grupos = new Map();
@@ -134,7 +135,25 @@
     if (!nos.length) nos.push(el('div', 'vazio', s.itens.length ? 'Nenhum item com esses filtros.' : 'Este setor ainda não tem itens. Toque em “Cadastrar itens” e cole a sua lista.'));
     $('lista').replaceChildren(...nos);
     status();
+    avisos();
   }
+
+  /* Data da lista recebida e recontagem pedida pelo administrador. */
+  const KLISTA = KEY + '-lista';
+  const infoLista = () => { try { return JSON.parse(localStorage.getItem(KLISTA)) || {}; } catch (e) { return {}; } };
+  const pedido = () => (infoLista().recontagens || {})[C.nomeArq(emp().nome)];
+  const pedidas = () => (pedido() || { itens: [] }).itens;
+  function avisos() {
+    const info = infoLista(), n = pedidas().length;
+    const quando = info.quando ? new Date(info.quando).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    $('listaInfo').textContent = quando ? (info.origem ? 'Lista enviada em ' : 'Lista atualizada em ') + quando : '';
+    $('filtro').querySelector('[value=recont]').hidden = !n;
+    if (!n && $('filtro').value === 'recont') { $('filtro').value = ''; lista(); }
+    $('bRecont').hidden = !n || !!info.origem;
+    const aqui = setor().itens.filter(i => pedidas().includes(K.chave(i))).length;
+    $('bRecont').textContent = '🔁 Recontagem pedida: ' + n + (n === 1 ? ' item' : ' itens') + ' (' + aqui + ' nesta família)';
+  }
+  $('bRecont').onclick = () => { $('filtro').value = 'recont'; $('q').value = ''; $('cat').value = ''; lista(); };
 
   document.querySelectorAll('[data-fechar]').forEach(b => b.onclick = () => b.closest('dialog').close());
   $('emp').onchange = () => { estado.sel = { emp: $('emp').value, set: '' }; salvar(); tudo(); salvar(); };
@@ -306,6 +325,7 @@
     $('mServ').textContent = servidor() ? '✔ Conectado ao Google' : 'Conectar ao Google';
     $('mLink').hidden = !souAdmin();
     $('mLista').hidden = !souAdmin() || !servidor();
+    $('mComp').hidden = !souAdmin() || !servidor();
     $('mUsuarios').hidden = !souAdmin();
     $('mAdmTxt').textContent = estado.admin ? 'Administrador: ' + estado.admin : 'Este aparelho ainda não tem administrador.';
   }
@@ -505,7 +525,14 @@
   }
   const agora = () => new Date().toTimeString().slice(0, 8).replace(':', 'h').replace(':', '-');
   const localAtual = () => $('cat').value;
-  const montar = () => C.finalizacao(estado, emp().id, $('fGrupo').value, localAtual(), estado.usuario, hoje(), agora());
+  function montar() {
+    const data = hoje(), hora = agora(), grupo = $('fGrupo').value;
+    const f = C.finalizacao(estado, emp().id, grupo, localAtual(), estado.usuario, data, hora);
+    const meta = { usuario: estado.usuario, aparelho: idAparelho(), data, hora };
+    if (pedido()) meta.recontagem = pedido().id;
+    f.pacote.arquivos.push({ nome: f.pacote.id + '_contagem.json', conteudo: JSON.stringify(K.contagemDe(estado, emp().id, grupo, localAtual(), meta)) });
+    return f;
+  }
   function resumoFim() {
     $('fMsg').textContent = '';
     const r = montar().total;
@@ -545,8 +572,6 @@
   };
 
   /* Lista de itens: o aparelho que a enviou pelo botão é a origem; os outros recebem. */
-  const KLISTA = KEY + '-lista';
-  const infoLista = () => { try { return JSON.parse(localStorage.getItem(KLISTA)) || {}; } catch (e) { return {}; } };
   function gravarInfo(mais) {
     try { localStorage.setItem(KLISTA, JSON.stringify(Object.assign(infoLista(), mais))); } catch (e) { /* baixa de novo depois */ }
   }
@@ -559,7 +584,8 @@
   async function enviarLista(auto) {
     const lista = C.listaItens(estado), texto = JSON.stringify(lista);
     const r = await chamar('salvarLista', { auth: estado.pins[estado.admin], aparelho: idAparelho(), auto, lista });
-    gravarInfo(r.assumida ? { origem: true, versao: r.versao, enviado: texto } : { origem: false });
+    gravarInfo(r.assumida ? { origem: true, versao: r.versao, enviado: texto, quando: new Date().toISOString() } : { origem: false });
+    avisos();
     return r;
   }
   /* Digitação ainda não somada: não mexe na tela agora. */
@@ -573,16 +599,25 @@
       const r = await chamar('lista', { versao: mesmo ? info.versao : '' });
       gravarInfo({ url: cfg.url });
       if (!r.versao) return;
+      gravarInfo({ quando: r.quando || '' });
       if (r.origem === idAparelho()) {
-        gravarInfo({ origem: true });
+        gravarInfo({ origem: true, recontagens: r.recontagens || {} });
+        avisos();
         if (podeEnviar() && infoLista().enviado !== JSON.stringify(C.listaItens(estado))) await enviarLista(true);
         return;
       }
       gravarInfo({ origem: false });
-      if (!r.lista || digitando()) return;
-      estado = C.aplicarLista(estado, r.lista);
-      gravarInfo({ versao: r.versao });
-      salvar(); tudo(); salvar();
+      if (digitando()) return;
+      let mudou = false;
+      if (r.lista) { estado = C.aplicarLista(estado, r.lista); gravarInfo({ versao: r.versao }); mudou = true; }
+      /* Recontagem nova: apaga a contagem anterior dos itens pedidos, uma vez só. */
+      const antes = infoLista().recontagens || {}, agoraPedidos = r.recontagens || {};
+      for (const nome in agoraPedidos) {
+        if (antes[nome] && antes[nome].id === agoraPedidos[nome].id) continue;
+        if (K.limparParaRecontar(estado, nome, agoraPedidos[nome].itens)) mudou = true;
+      }
+      gravarInfo({ recontagens: agoraPedidos });
+      if (mudou) { salvar(); tudo(); salvar(); } else avisos();
     })().catch(() => { /* sem internet ou script antigo: tenta de novo depois */ }).finally(() => { sincLista = null; });
     return sincLista;
   }
@@ -676,6 +711,9 @@
   window.addEventListener('online', () => { enviarFila(); sincronizar().then(sincronizarLista); });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { enviarFila(); sincronizar().then(sincronizarLista); } });
   setInterval(() => { if (lerFila().length && navigator.onLine) enviarFila(); }, 60000);
+
+  /* O que a tela de conferência das contagens usa. */
+  window.App = { emp, chamar, souAdmin, hoje, agora, baixar, avisos, auth: () => estado.pins[estado.admin], infoLista, gravarInfo };
 
   /* Opções */
   const fechar = () => $('dMenu').close();
