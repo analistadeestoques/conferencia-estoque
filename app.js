@@ -171,19 +171,19 @@
     $('data').textContent = hoje().split('-').reverse().join('/');
     $('resp').textContent = estado.usuario || '—';
   }
-  /* PIN: evita contar no nome de outra pessoa por engano. Não é segurança forte. */
+  /* Senha: evita contar no nome de outra pessoa por engano. Não é segurança forte. */
   const cadastrado = nome => (estado.usuarios || []).find(n => C.norm(n) === C.norm(nome));
   const temPin = nome => !!(nome && estado.pins && estado.pins[nome]);
   async function resumoPin(nome, pin) {
-    /* "sais" preserva o PIN de quem teve o nome corrigido. */
+    /* "sais" preserva a senha de quem teve o nome corrigido. */
     return resumoSal((estado.sais && estado.sais[nome]) || C.norm(nome), pin);
   }
   async function resumoSal(sal, pin) {
     const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sal + ':' + pin));
     return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
   }
-  /* Tela de entrada: '' = pergunta, 'ja' = já tenho usuário, 'novo' = cadastro novo. */
-  let modoEntrada = '';
+  /* Tela de entrada: 'inicio' (aparelho sem usuários), 'entrar', 'novo' ou 'trocar' (senha). */
+  let modoEntrada = '', trocando = null;
   const semUsuarios = () => !(estado.usuarios || []).length;
   /* Servidor (script no Google). Endereço e chave ficam só neste aparelho, fora dos backups. */
   const KSERV = KEY + '-servidor';
@@ -205,7 +205,7 @@
   /* A lista do servidor vale para todos os aparelhos. */
   function aplicarUsuarios(r) {
     if (!r.usuarios || !r.usuarios.length) return;
-    for (const k of ['usuarios', 'pins', 'sais', 'admin', 'recuperacao']) estado[k] = r[k];
+    for (const k of ['usuarios', 'pins', 'sais', 'admin', 'recuperacao', 'logins', 'definida']) if (r[k] !== undefined) estado[k] = r[k];
     if (estado.usuario && !estado.usuarios.includes(estado.usuario)) {
       estado.usuario = '';
       try { sessionStorage.removeItem(SESSAO); } catch (e) { /* sem sessão */ }
@@ -215,112 +215,146 @@
   async function sincronizar() {
     if (!servidor() || recPendente) return;
     try { aplicarUsuarios(await chamar('usuarios')); } catch (e) { return; }
-    if ($('dUser').open) { montarNomes(); $('uCancelar').hidden = !identificado(); } else if (!identificado()) pedirUsuario();
+    if (!$('dUser').open) { if (!identificado()) pedirUsuario(); return; }
+    if (modoEntrada === 'inicio' && !semUsuarios()) mostrar('entrar');
+    $('uCancelar').hidden = !identificado();
   }
 
-  function ajustarPin() {
-    const n = cadastrado($('uNome').value), criar = modoEntrada === 'novo' || (!!n && !temPin(n));
-    $('uPin').placeholder = criar ? 'Crie um PIN de 4 números' : 'Digite o seu PIN';
-    $('uPin2').hidden = !criar;
-    /* O administrador também pode digitar o código de recuperação, de 8 números. */
-    $('uPin').maxLength = modoEntrada === 'ja' && n && n === estado.admin ? 8 : 4;
+  const logins = () => C.loginsDe(estado.usuarios, estado.logins);
+  const comLogin = l => { const m = logins(); return (estado.usuarios || []).find(n => m[n] === l); };
+  function mostrar(m) {
+    if (m === 'entrar' && semUsuarios()) m = 'inicio';
+    modoEntrada = m;
+    if (m !== 'trocar') trocando = null;
+    /* Só dá para criar usuário aqui enquanto o aparelho não tem administrador nem Google. */
+    const livre = !estado.admin && !servidor();
+    $('uTitulo').textContent = m === 'trocar' ? 'Crie a sua senha' : m === 'novo' ? 'Novo usuário' : 'Entrar';
+    $('uTexto').textContent = m === 'inicio' ? 'Este aparelho ainda não tem usuários. Se já existe um cadastro, abra o link de conexão enviado pelo administrador.'
+      : m === 'novo' ? 'Informe o nome completo. O login é sugerido e você pode ajustar.'
+      : m === 'trocar' ? 'Escolha uma senha só sua, com 6 caracteres ou mais.' : 'Digite o seu login e a sua senha.';
+    $('uCampos').hidden = m === 'inicio';
+    $('uEntrar').hidden = m === 'inicio';
+    $('uEntrar').textContent = m === 'trocar' ? 'Salvar senha' : m === 'novo' ? 'Criar e entrar' : 'Entrar';
+    $('uNome').hidden = m !== 'novo';
+    $('uLogin').hidden = m === 'trocar';
+    $('uPin2').hidden = m !== 'novo' && m !== 'trocar';
+    $('uPin').placeholder = m === 'trocar' ? 'Nova senha' : m === 'novo' ? 'Senha (6 ou mais)' : 'Senha';
+    $('uNome').value = $('uLogin').value = $('uPin').value = $('uPin2').value = '';
+    $('uVer').checked = false; $('uPin').type = $('uPin2').type = 'password';
+    $('uServ').hidden = !!servidor() || m === 'novo' || m === 'trocar' || !livre;
+    $('uNovo').hidden = m === 'novo' || m === 'trocar' || !livre;
+    $('uNovo').textContent = semUsuarios() ? 'Criar o primeiro usuário' : 'Criar usuário';
+    $('uTrazer').hidden = m !== 'inicio';
+    $('uVoltar').hidden = m !== 'novo';
     $('uErro').textContent = '';
   }
-  function mostrar(m) {
-    modoEntrada = m;
-    const vazio = m === 'ja' && semUsuarios();
-    $('uNome').value = $('uPin').value = $('uPin2').value = '';
-    $('uEscolha').hidden = !!m;
-    $('uServ').hidden = !!servidor() || !semUsuarios();
-    $('uCampos').hidden = !m || vazio;
-    $('uEntrar').hidden = !m || vazio;
-    $('uVoltar').hidden = !m;
-    $('uTrazer').hidden = !vazio;
-    $('uLista').hidden = m !== 'ja';
-    $('uTexto').textContent = m !== 'novo' ? 'Toque no seu nome e digite o PIN.'
-      : 'Digite o seu nome e crie um PIN.' + (servidor() ? '' : ' Este aparelho ainda não está conectado ao Google: peça o link de conexão ao administrador.');
-    /* Quem usou o aparelho por último já vem preenchido. */
-    if (m === 'ja' && ultimo()) $('uNome').value = ultimo();
-    ajustarPin();
-    if (vazio) $('uErro').textContent = 'Este aparelho ainda não tem usuários. Traga o arquivo de usuários salvo no outro aparelho, ou toque em Voltar e faça um Cadastro novo.';
-  }
-  function montarNomes() {
-    $('uLista').replaceChildren(...(estado.usuarios || []).map(n => {
-      const b = el('button', '', n); b.type = 'button';
-      b.onclick = () => { $('uNome').value = n; $('uPin').value = $('uPin2').value = ''; ajustarPin(); $('uPin').focus(); };
-      return b;
-    }));
-  }
-  const KULTIMO = KEY + '-ultimo';
-  const ultimo = () => cadastrado(localStorage.getItem(KULTIMO) || '') || '';
   function pedirUsuario() {
     if ($('dUser').open) return;
     $('uCancelar').hidden = !identificado();
     recPendente = '';
-    montarNomes();
-    mostrar(ultimo() ? 'ja' : '');
+    mostrar('entrar');
     $('dUser').showModal();
-    if (ultimo()) $('uPin').focus();
+    if (modoEntrada === 'entrar') $('uLogin').focus();
   }
-  $('uJa').onclick = () => { mostrar('ja'); sincronizar(); };
   $('uNovo').onclick = () => { mostrar('novo'); $('uNome').focus(); };
-  $('uVoltar').onclick = () => mostrar('');
+  $('uVoltar').onclick = () => mostrar('entrar');
+  $('uVer').onchange = () => { $('uPin').type = $('uPin2').type = $('uVer').checked ? 'text' : 'password'; };
+  /* Enquanto a pessoa não mexer no login, ele acompanha o nome. */
+  const sugerir = (nome, login) => {
+    let ultimaSugestao = '';
+    $(nome).addEventListener('input', () => {
+      if ($(login).value && $(login).value !== ultimaSugestao) return;
+      ultimaSugestao = $(nome).value.trim() ? C.loginDe($(nome).value) : ''; $(login).value = ultimaSugestao;
+    });
+  };
+  sugerir('uNome', 'uLogin');
   $('uTrazer').onclick = () => $('uArq').click();
   $('uArq').onchange = async () => {
     const arq = $('uArq').files[0]; $('uArq').value = '';
     if (!arq || !semUsuarios()) return;
     try {
       Object.assign(estado, C.lerUsuarios(await arq.text()));
-      salvar(); $('dUser').close();
-      if (!$('dUser').open) pedirUsuario();
-      mostrar('ja');
+      salvar(); mostrar('entrar');
     } catch (e) { $('uErro').textContent = 'Esse não é um arquivo de usuários válido.'; }
   };
-  async function entrar() {
-    const digitado = $('uNome').value.replace(/\s+/g, ' ').trim(), pin = $('uPin').value;
-    const erro = t => { $('uErro').textContent = t; };
-    if (!modoEntrada) return;
-    if (!digitado) return erro('Digite ou toque no seu nome.');
-    if (modoEntrada === 'novo' && cadastrado(digitado)) return erro('Esse usuário já existe. Toque em Voltar e escolha Já tenho usuário.');
-    if (modoEntrada === 'novo' && digitado.includes(',')) return erro('Digite o nome, sem vírgulas.');
-    /* Usuário criado ou renomeado em outro aparelho: busca a lista antes de recusar. */
-    if (modoEntrada === 'ja' && !cadastrado(digitado) && servidor()) await sincronizar();
-    if (modoEntrada === 'ja' && !cadastrado(digitado)) return erro('Usuário não encontrado neste aparelho. Toque em Voltar e escolha Cadastro novo.');
-    const nome = cadastrado(digitado) || digitado;
-    if (nome === estado.admin && /^\d{8}$/.test(pin)) {
-      const rec = await resumoPin(nome, pin);
-      if (rec !== estado.recuperacao) return erro('Código de recuperação incorreto.');
-      if (servidor()) recPendente = rec;
-      delete estado.pins[nome]; salvar();
-      $('uPin').value = $('uPin2').value = ''; ajustarPin();
-      return erro('Código aceito. Crie o novo PIN.');
-    }
-    if (!/^\d{4}$/.test(pin)) return erro('O PIN precisa ter 4 números.');
-    let hash = await resumoPin(nome, pin);
-    if (temPin(nome)) {
-      /* PIN pode ter sido trocado em outro aparelho: confere a lista nova antes de recusar. */
-      if (estado.pins[nome] !== hash && servidor()) { await sincronizar(); hash = await resumoPin(nome, pin); }
-      if (estado.pins[nome] !== hash) { $('uPin').value = ''; return erro('PIN incorreto. Peça ao administrador para trocar.'); }
-    } else {
-      if ($('uPin2').value !== pin) return erro('Os dois PINs precisam ser iguais.');
-      if (servidor()) {
-        try {
-          const r = recPendente ? await chamar('recuperar', { recuperacao: recPendente, hash })
-            : await chamar('cadastrar', { nome, hash: await resumoPin(nome, pin) });
-          recPendente = ''; aplicarUsuarios(r);
-        } catch (e) { return erro(e.semRede ? 'Para cadastrar ou trocar o PIN é preciso internet.' : e.message); }
-      }
-      estado.pins = estado.pins || {}; estado.pins[nome] = hash;
-    }
+  const SENHA_CURTA = 'A senha precisa ter 6 caracteres ou mais.';
+  const loginRuim = l => !C.loginValido(l) || !l.includes('.') ? 'O login deve ser nome.sobrenome (ou nome.setor), sem espaços.' : '';
+  const loginEmUso = l => 'Já existe um cadastro com o login ' + l + '. Use outro sobrenome ou o nome do setor.';
+  function concluir(nome) {
     estado.usuarios = estado.usuarios || [];
     if (!estado.usuarios.includes(nome)) estado.usuarios.push(nome);
     estado.usuario = nome;
-    try { localStorage.setItem(KULTIMO, nome); } catch (e) { /* só deixa de lembrar */ }
     try { sessionStorage.setItem(SESSAO, hoje()); } catch (e) { /* pergunta de novo depois */ }
+    trocando = null; recPendente = '';
     salvar(); cabecalho(); $('dUser').close();
   }
-  $('uNome').oninput = ajustarPin;
-  $('uForm').onsubmit = e => { e.preventDefault(); entrar().catch(() => { $('uErro').textContent = 'Não foi possível conferir o PIN neste navegador.'; }); };
+  const guardarSenha = (nome, hash) => {
+    estado.pins = estado.pins || {}; estado.definida = estado.definida || {};
+    estado.pins[nome] = hash; estado.definida[nome] = true;
+  };
+  function pedirNovaSenha(nome, antigo) {
+    mostrar('trocar'); trocando = { nome, antigo }; $('uPin').focus();
+  }
+  async function entrar() {
+    const erro = t => { $('uErro').textContent = t; };
+    const senha = $('uPin').value, repetida = $('uPin2').value;
+    if (modoEntrada === 'novo') return criarAqui(senha, repetida, erro);
+    if (modoEntrada === 'trocar') return trocarSenha(senha, repetida, erro);
+    if (modoEntrada !== 'entrar') return;
+    const login = C.normLogin($('uLogin').value);
+    if (!login || !senha) return erro('Digite o login e a senha.');
+    const recusa = () => { $('uPin').value = ''; erro('Login ou senha incorretos.'); };
+    /* Usuário criado ou alterado em outro aparelho: busca a lista antes de recusar. */
+    if (!comLogin(login) && servidor()) await sincronizar();
+    let nome = comLogin(login);
+    if (!nome) return recusa();
+    if (!temPin(nome)) return estado.admin ? erro('Peça ao administrador uma senha provisória.') : pedirNovaSenha(nome, '');
+    let hash = await resumoPin(nome, senha);
+    if (estado.pins[nome] !== hash && servidor()) { await sincronizar(); nome = comLogin(login); if (!nome) return recusa(); hash = await resumoPin(nome, senha); }
+    if (estado.pins[nome] !== hash) {
+      /* Administrador esqueceu a senha: o código de recuperação, de 8 números, vale uma vez. */
+      if (nome !== estado.admin || !/^\d{8}$/.test(senha) || hash !== estado.recuperacao) return recusa();
+      if (servidor()) recPendente = hash;
+      pedirNovaSenha(nome, '');
+      return erro('Código aceito. Crie a nova senha.');
+    }
+    if (!(estado.definida && estado.definida[nome])) return pedirNovaSenha(nome, hash);
+    concluir(nome);
+  }
+  async function trocarSenha(senha, repetida, erro) {
+    const { nome, antigo } = trocando;
+    if (senha.length < 6) return erro(SENHA_CURTA);
+    if (senha !== repetida) return erro('As duas senhas precisam ser iguais.');
+    const hash = await resumoPin(nome, senha);
+    if (hash === antigo) return erro('A nova senha precisa ser diferente da atual.');
+    if (servidor()) {
+      try {
+        const r = recPendente ? await chamar('recuperar', { recuperacao: recPendente, hash }) : await chamar('senha', { nome, antigo, hash });
+        aplicarUsuarios(r);
+      } catch (e) {
+        if (!e.semRede) return erro(e.message);
+        if (!antigo) return erro('Para trocar a senha é preciso internet.');
+        alert('Sem internet. Você entra agora com a senha atual e cria a nova na próxima vez.');
+        return concluir(nome);
+      }
+    }
+    guardarSenha(nome, hash);
+    concluir(nome);
+  }
+  async function criarAqui(senha, repetida, erro) {
+    if (estado.admin || servidor()) return erro('Só o administrador cadastra usuários.');
+    const nome = $('uNome').value.replace(/\s+/g, ' ').trim(), login = C.normLogin($('uLogin').value);
+    if (!nome || nome.includes(',')) return erro('Digite o nome, sem vírgulas.');
+    if (cadastrado(nome)) return erro('Já existe um usuário com esse nome.');
+    if (loginRuim(login)) return erro(loginRuim(login));
+    if (comLogin(login)) return erro(loginEmUso(login));
+    if (senha.length < 6) return erro(SENHA_CURTA);
+    if (senha !== repetida) return erro('As duas senhas precisam ser iguais.');
+    estado.logins = logins(); estado.logins[nome] = login;
+    guardarSenha(nome, await resumoPin(nome, senha));
+    concluir(nome);
+  }
+  $('uForm').onsubmit = e => { e.preventDefault(); entrar().catch(() => { $('uErro').textContent = 'Não foi possível conferir a senha neste navegador.'; }); };
 
   /* Cadastro de usuários: só o administrador. */
   const souAdmin = () => identificado() && !!estado.admin && estado.usuario === estado.admin;
@@ -345,7 +379,7 @@
       catch (e) { return alert('O código não foi trocado. ' + e.message); }
     }
     estado.recuperacao = rec; salvar();
-    alert('ANOTE E GUARDE o código de recuperação do administrador:\n\n' + codigo + '\n\nSe esquecer o PIN, digite esse código no lugar dele. Ele não será mostrado novamente.');
+    alert('ANOTE E GUARDE o código de recuperação do administrador:\n\n' + codigo + '\n\nSe esquecer a senha, digite esse código no lugar dela. Ele não será mostrado novamente.');
   }
   $('mSouAdm').onclick = async () => {
     if (estado.admin || !confirm('Definir “' + estado.usuario + '” como administrador deste aparelho?')) return;
@@ -354,18 +388,20 @@
   let editando = '';
   function editar(nome) {
     editando = nome;
-    $('aTitulo').textContent = nome ? 'Alterando: ' + nome + ' (deixe o PIN vazio para manter o atual)' : 'Novo usuário';
-    $('aNome').value = nome; $('aPin').value = ''; $('aMsg').textContent = '';
+    $('aTitulo').textContent = nome ? 'Alterando: ' + nome + ' (deixe a senha vazia para manter a atual)' : 'Novo usuário';
+    $('aNome').value = nome; $('aLogin').value = nome ? logins()[nome] : ''; $('aPin').value = ''; $('aMsg').textContent = '';
   }
   const abrirForm = nome => { editar(nome); $('aForm').hidden = false; $('aForm').scrollIntoView({ block: 'nearest' }); (nome ? $('aPin') : $('aNome')).focus(); };
   const fecharForm = () => { editar(''); $('aForm').hidden = true; };
   function listaUsuarios() {
     const ordem = (estado.usuarios || []).slice().sort((x, y) => (y === estado.admin) - (x === estado.admin) || x.localeCompare(y, 'pt-BR'));
     $('aLista').replaceChildren(...ordem.map(n => {
-      const adm = n === estado.admin, d = el('div', adm ? 'usu adm' : 'usu'), ed = el('button', '', 'Alterar nome / PIN');
+      const adm = n === estado.admin, d = el('div', adm ? 'usu adm' : 'usu'), ed = el('button', '', 'Alterar');
       ed.type = 'button'; ed.onclick = () => abrirForm(n);
       const quem = el('span', '', n);
-      quem.append(el('small', '', (adm ? 'Administrador · acessa tudo' : 'Usuário · só faz contagem') + (temPin(n) ? '' : ' · ainda sem PIN')));
+      quem.append(el('small', '', 'Login: ' + logins()[n]));
+      quem.append(el('small', '', (adm ? 'Administrador · acessa tudo' : 'Usuário · só faz contagem') +
+        (!temPin(n) ? ' · ainda sem senha' : (estado.definida || {})[n] ? '' : ' · vai criar a senha no próximo acesso')));
       d.append(quem, ed);
       if (n !== estado.admin) {
         const x = el('button', 'x', 'Excluir'); x.type = 'button';
@@ -376,7 +412,7 @@
             catch (e) { $('aMsg').textContent = e.message; return; }
           }
           estado.usuarios = estado.usuarios.filter(u => u !== n);
-          delete (estado.pins || {})[n]; delete (estado.sais || {})[n];
+          for (const k of ['pins', 'sais', 'logins', 'definida']) delete (estado[k] || {})[n];
           salvar(); listaUsuarios(); fecharForm();
         };
         d.append(x);
@@ -386,35 +422,40 @@
   }
   async function salvarUsuario() {
     if (!souAdmin()) return;
-    const novo = $('aNome').value.replace(/\s+/g, ' ').trim(), pin = $('aPin').value, antigo = editando;
+    const novo = $('aNome').value.replace(/\s+/g, ' ').trim(), login = C.normLogin($('aLogin').value), senha = $('aPin').value, antigo = editando;
     const erro = t => { $('aMsg').textContent = t; };
     if (!novo || novo.includes(',')) return erro('Digite o nome, sem vírgulas.');
     const outro = cadastrado(novo);
     if (outro && outro !== antigo) return erro('Já existe um usuário com esse nome.');
-    if (pin && !/^\d{4}$/.test(pin)) return erro('O PIN precisa ter 4 números.');
-    if (!antigo && !pin) return erro('Informe o PIN do novo usuário.');
-    estado.usuarios = estado.usuarios || []; estado.pins = estado.pins || {}; estado.sais = estado.sais || {};
+    const atual = logins();
+    /* Login antigo, sem ponto (quem tem um nome só), continua valendo enquanto não for mudado. */
+    if ((!antigo || login !== atual[antigo]) && loginRuim(login)) return erro(loginRuim(login));
+    if ((estado.usuarios || []).some(n => n !== antigo && atual[n] === login)) return erro(loginEmUso(login));
+    if (senha && senha.length < 6) return erro(SENHA_CURTA);
+    if (!antigo && !senha) return erro('Informe uma senha provisória para o novo usuário.');
+    for (const k of ['pins', 'sais', 'definida']) estado[k] = estado[k] || {};
+    estado.usuarios = estado.usuarios || [];
+    estado.logins = atual;
+    /* A senha é embaralhada com o mesmo "sal" que o usuário já tinha. */
+    const sal = antigo ? (estado.sais[antigo] || C.norm(antigo)) : C.norm(novo);
+    const hash = senha ? await resumoSal(sal, senha) : '';
     if (servidor()) {
-      /* O PIN é embaralhado com o mesmo "sal" que o usuário já tinha. */
-      const sal = antigo ? (estado.sais[antigo] || C.norm(antigo)) : C.norm(novo);
-      const hash = pin ? await resumoSal(sal, pin) : '';
-      try { await chamar('salvar', { auth: estado.pins[estado.admin], antigo, nome: novo, hash }); }
+      try { await chamar('salvar', { auth: estado.pins[estado.admin], antigo, nome: novo, login, hash }); }
       catch (e) { return erro(e.message); }
-      if (!antigo) estado.sais[novo] = sal;
     }
-    if (!antigo) estado.usuarios.push(novo);
+    if (!antigo) { estado.usuarios.push(novo); estado.sais[novo] = sal; }
     else if (antigo !== novo) {
-      estado.sais[novo] = estado.sais[antigo] || C.norm(antigo); delete estado.sais[antigo];
-      if (estado.pins[antigo]) estado.pins[novo] = estado.pins[antigo];
-      delete estado.pins[antigo];
+      estado.sais[novo] = sal; delete estado.sais[antigo];
+      for (const k of ['pins', 'logins', 'definida']) { if (estado[k][antigo] !== undefined) estado[k][novo] = estado[k][antigo]; delete estado[k][antigo]; }
       estado.usuarios[estado.usuarios.indexOf(antigo)] = novo;
       if (estado.usuario === antigo) estado.usuario = novo;
       if (estado.admin === antigo) estado.admin = novo;
       for (const e of estado.empresas) for (const s of e.setores) if (s.resp) s.resp = s.resp.split(', ').map(n => n === antigo ? novo : n).join(', ');
     }
-    if (pin) estado.pins[novo] = await resumoPin(novo, pin);
+    estado.logins[novo] = login;
+    if (hash) { estado.pins[novo] = hash; estado.definida[novo] = novo === estado.admin; }
     salvar(); cabecalho(); listaUsuarios(); fecharForm();
-    erro(antigo ? 'Salvo.' : 'Salvo. “' + novo + '” entra como usuário normal, em “Já tenho usuário”.');
+    erro(antigo ? 'Salvo.' : 'Salvo. “' + novo + '” entra com o login ' + login + ' e a senha provisória.');
   }
   /* Abre mostrando o que já tem e busca no Google quem se cadastrou em outro aparelho. */
   async function atualizarUsuarios() {
@@ -432,6 +473,7 @@
     baixar('usuarios_conferencia_' + hoje() + '.json', C.arquivoUsuarios(estado), 'application/json');
     $('aMsg').textContent = 'Arquivo salvo em Downloads.';
   };
+  sugerir('aNome', 'aLogin');
   $('aNovo').onclick = () => abrirForm('');
   $('aCancelar').onclick = fecharForm;
   $('aCodigo').onclick = () => { if (souAdmin() && confirm('Gerar um novo código? O anterior deixa de valer.')) novoCodigo(); };
@@ -693,19 +735,17 @@
     if (!r.usuarios.length) {
       if (!estado.admin) throw new Error('O servidor ainda está vazio. Conecte primeiro o aparelho do administrador (Menu → Definir-me como administrador).');
       if (!confirm('Enviar os usuários deste aparelho para o Google? “' + estado.admin + '” será o administrador de todos.')) return false;
-      r = await chamar('iniciar', { usuarios: estado.usuarios, pins: estado.pins, sais: estado.sais, admin: estado.admin, recuperacao: estado.recuperacao }, cfg);
+      r = await chamar('iniciar', { usuarios: estado.usuarios, pins: estado.pins, sais: estado.sais, admin: estado.admin, recuperacao: estado.recuperacao,
+        logins: logins(), definida: estado.definida }, cfg);
     } else if (!semUsuarios()) {
-      /* Quem se cadastrou aqui antes de o aparelho ter Google não pode perder o acesso. */
-      const soAqui = servidor() ? [] : estado.usuarios.filter(n => temPin(n) && !r.usuarios.some(u => C.norm(u) === C.norm(n)) &&
-        (!estado.sais || !estado.sais[n] || estado.sais[n] === C.norm(n)));
-      if (!confirm(soAqui.length ? 'Cadastrados só neste aparelho: ' + soAqui.join(', ') + '. Serão enviados ao Google como usuários normais, e a lista do Google passa a valer. Continuar?'
-        : 'Os usuários deste aparelho serão substituídos pelos do Google. Continuar?')) return false;
-      for (const n of soAqui) r = await chamar('cadastrar', { nome: n, hash: estado.pins[n] }, cfg);
+      const soAqui = servidor() ? [] : estado.usuarios.filter(n => !r.usuarios.some(u => C.norm(u) === C.norm(n)));
+      if (!confirm('Os usuários deste aparelho serão substituídos pelos do Google.' +
+        (soAqui.length ? ' Só existem aqui: ' + soAqui.join(', ') + '. O administrador precisará cadastrá-los.' : '') + ' Continuar?')) return false;
     }
     localStorage.setItem(KSERV, JSON.stringify(cfg));
     aplicarUsuarios(r);
     $('dServ').close();
-    if ($('dUser').open) { montarNomes(); mostrar('ja'); } else if (!identificado()) pedirUsuario();
+    if ($('dUser').open) mostrar('entrar'); else if (!identificado()) pedirUsuario();
     await sincronizarLista();
     alert(souAdmin() ? 'Aparelho conectado. Para ligar os outros: Menu → Enviar link de conexão.' : 'Aparelho conectado.');
     enviarFila();
@@ -849,7 +889,7 @@
     let novo;
     try { novo = C.lerBackup(await f.text()); } catch (e) { return alert('Arquivo de backup inválido.'); }
     if (!confirm('Substituir TODOS os dados deste tablet pelo backup?')) return;
-    if (estado.admin || !novo.usuarios) for (const k of ['usuarios', 'pins', 'sais', 'admin', 'recuperacao', 'usuario']) novo[k] = estado[k];
+    if (estado.admin || !novo.usuarios) for (const k of ['usuarios', 'pins', 'sais', 'admin', 'recuperacao', 'logins', 'definida', 'usuario']) novo[k] = estado[k];
     estado = novo; bloqueado = false; aviso(''); converter(); mudou();
   };
 

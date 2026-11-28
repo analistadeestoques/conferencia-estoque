@@ -26,6 +26,8 @@ header select{flex:1;min-width:150px;width:0}
 .quem{font-size:14px}
 .nomes{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 #uNome,.pin{width:100%;margin-bottom:8px}
+.ver{display:flex;gap:8px;align-items:center;margin-bottom:8px}.ver input{min-height:0;width:20px;height:20px}
+#uForm [hidden]{display:none}
 #uErro,#aMsg,#sMsg,#fMsg{color:var(--falta);font-weight:600}
 .usu{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--bd)}
 .usu:last-child{border-bottom:0}
@@ -162,20 +164,18 @@ button.passo{width:48px;min-height:44px;font-size:22px}
 
 <dialog id="dUser">
   <form id="uForm">
-    <h3>Quem vai fazer a contagem?</h3>
-    <div id="uEscolha">
-      <p>Você já tem um usuário?</p>
-      <div class="row"><button type="button" class="p" id="uJa">Já tenho usuário</button><button type="button" id="uNovo">Cadastro novo</button><button type="button" id="uServ">Conectar ao Google</button></div>
-    </div>
-    <div id="uCampos">
+    <h3 id="uTitulo">Entrar</h3>
     <p id="uTexto"></p>
-    <div class="nomes" id="uLista"></div>
-    <input id="uNome" placeholder="Nome e sobrenome" autocomplete="off" maxlength="60">
-    <input id="uPin" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="PIN de 4 números" aria-label="PIN">
-    <input id="uPin2" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="Repita o PIN para confirmar" aria-label="Repita o PIN" hidden>
+    <div id="uCampos">
+      <input id="uNome" class="pin" placeholder="Nome e sobrenome" autocomplete="off" maxlength="60" aria-label="Nome e sobrenome">
+      <input id="uLogin" class="pin" placeholder="Login (nome.sobrenome)" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="40" aria-label="Login">
+      <input id="uPin" class="pin" type="password" autocapitalize="none" autocomplete="off" maxlength="60" placeholder="Senha" aria-label="Senha">
+      <input id="uPin2" class="pin" type="password" autocapitalize="none" autocomplete="off" maxlength="60" placeholder="Repita a senha" aria-label="Repita a senha">
+      <label class="ver"><input type="checkbox" id="uVer"> Mostrar senha</label>
     </div>
     <div id="uErro" role="alert"></div>
-    <div class="row"><button class="p" type="submit" id="uEntrar">Entrar</button><button type="button" class="p" id="uTrazer">Trazer usuários do arquivo</button><input type="file" id="uArq" accept=".json" hidden><button type="button" id="uVoltar">Voltar</button><button type="button" id="uCancelar">Cancelar</button></div>
+    <div class="row"><button class="p" type="submit" id="uEntrar">Entrar</button><button type="button" id="uCancelar">Cancelar</button></div>
+    <div class="row" id="uEscolha"><button type="button" class="p" id="uServ">Conectar ao Google</button><button type="button" id="uNovo">Criar usuário</button><button type="button" id="uTrazer">Trazer usuários do arquivo</button><button type="button" id="uVoltar">Voltar</button><input type="file" id="uArq" accept=".json" hidden></div>
   </form>
 </dialog>
 
@@ -187,8 +187,9 @@ button.passo{width:48px;min-height:44px;font-size:22px}
   <div id="aMsg" role="alert"></div>
   <form id="aForm" hidden>
     <p id="aTitulo"></p>
-    <input id="aNome" class="pin" placeholder="Nome e sobrenome" autocomplete="off" maxlength="60">
-    <input id="aPin" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="PIN de 4 números">
+    <input id="aNome" class="pin" placeholder="Nome e sobrenome" autocomplete="off" maxlength="60" aria-label="Nome e sobrenome">
+    <input id="aLogin" class="pin" placeholder="Login (nome.sobrenome)" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="40" aria-label="Login">
+    <input id="aPin" class="pin" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off" maxlength="60" placeholder="Senha provisória (6 ou mais)" aria-label="Senha">
     <div class="row"><button class="p" type="submit">Salvar</button><button type="button" id="aCancelar">Cancelar</button></div>
   </form>
   <div class="row"><button type="button" id="aCodigo">Novo código de recuperação</button><button type="button" id="aExportar">Salvar arquivo de usuários</button><button type="button" data-fechar>Fechar</button></div>
@@ -263,7 +264,7 @@ button.passo{width:48px;min-height:44px;font-size:22px}
 <section class="grupo" id="gAp"><h4>Aparelhos e usuários</h4><div class="cartao"><button type="button" class="opc" id="mSouAdm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6zM9 12l2 2 4-4"/></svg><b>Definir-me como administrador</b><small>Libera o cadastro de usuários</small></button>
 <button type="button" class="opc" id="mLink"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></svg><b>Enviar link de conexão</b><small>Para ligar outro celular ou tablet</small></button>
 <button type="button" class="opc" id="mLista"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></svg><b>Enviar lista de itens</b><small>Os aparelhos recebem sem o saldo</small></button>
-<button type="button" class="opc" id="mUsuarios"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21c0-4 3-7 7-7s7 3 7 7M17 4a4 4 0 0 1 0 7M18 14c3 1 4 3 4 7"/></svg><b>Usuários</b><small>Ver quem tem acesso, adicionar e trocar PIN</small></button>
+<button type="button" class="opc" id="mUsuarios"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21c0-4 3-7 7-7s7 3 7 7M17 4a4 4 0 0 1 0 7M18 14c3 1 4 3 4 7"/></svg><b>Usuários</b><small>Ver quem tem acesso, adicionar e trocar senha</small></button>
 <button type="button" class="opc" id="mServ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 19h11a4 4 0 0 0 0-8 6 6 0 0 0-12-1 4.500 4.500 0 0 0 1 9z"/></svg><b>Conectar ao Google</b><small>Endereço e chave do script</small></button></div></section>
 <section class="grupo" id="gSeg"><h4>Segurança dos dados</h4><div class="cartao"><button type="button" class="opc" id="mBk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h13l3 3v13H4zM8 4v5h7V4M8 20v-6h8v6"/></svg><b>Baixar backup</b><small>Guarde o arquivo fora do aparelho</small></button>
 <button type="button" class="opc" id="mRs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 3-6.200M7 2v4H3M12 8v4l3 2"/></svg><b>Restaurar backup</b><small>Substitui os dados deste aparelho</small></button></div></section>

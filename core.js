@@ -376,8 +376,31 @@
     return o;
   }
 
-  /* Arquivo para levar os usuários (com PINs embaralhados) a outro aparelho. */
-  const CHAVES_USU = ['usuarios', 'pins', 'sais', 'admin', 'recuperacao'];
+  /* Login: nome.sobrenome (ou nome.setor), minúsculo e sem acentos. */
+  const normLogin = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const loginValido = l => l.length <= 40 && /^[a-z0-9]+(\.[a-z0-9]+)*$/.test(l);
+  const partes = nome => normLogin(nome).split(/[^a-z0-9]+/).filter(Boolean);
+  const cortar = l => l.slice(0, 40).replace(/\.$/, '');
+  function loginDe(nome) {
+    const p = partes(nome);
+    return cortar(p.length > 1 ? p[0] + '.' + p[p.length - 1] : p[0] || 'usuario');
+  }
+  /* Quem ainda não tem login (cadastros antigos) recebe um a partir do nome. */
+  function loginsDe(usuarios, logins) {
+    const r = {}, usados = new Set();
+    for (const n of usuarios || []) if (logins && logins[n]) { r[n] = logins[n]; usados.add(logins[n]); }
+    for (const n of usuarios || []) {
+      if (r[n]) continue;
+      let l = loginDe(n);
+      if (usados.has(l)) l = cortar(partes(n).join('.')) || l;
+      for (let i = 2, base = l; usados.has(l); i++) l = base + i;
+      r[n] = l; usados.add(l);
+    }
+    return r;
+  }
+
+  /* Arquivo para levar os usuários (com senhas embaralhadas) a outro aparelho. */
+  const CHAVES_USU = ['usuarios', 'pins', 'sais', 'admin', 'recuperacao', 'logins', 'definida'];
   function arquivoUsuarios(estado) {
     const o = { app: 'conferencia-estoque', tipo: 'usuarios' };
     for (const k of CHAVES_USU) if (estado[k] !== undefined) o[k] = estado[k];
@@ -408,7 +431,7 @@
   const gruposDe = empresa => [...new Set(empresa.setores.filter(s => s.itens.length).map(s => grupoDe(s.nome)))].sort();
   const localItem = it => (it.cat || '').replace(/^(Hotel|A&B) - /, '');
 
-  const CHAVES_PRIVADAS = ['usuarios', 'pins', 'sais', 'admin', 'recuperacao', 'usuario'];
+  const CHAVES_PRIVADAS = ['usuarios', 'pins', 'sais', 'admin', 'recuperacao', 'logins', 'definida', 'usuario'];
   function backupSemPins(estado) {
     const o = Object.assign({}, estado);
     for (const k of CHAVES_PRIVADAS) delete o[k];
@@ -512,6 +535,6 @@
     } catch (e) { return null; }
   }
 
-  const api = { chaveCod, arred, localItem, listaItens, contarItens, aplicarLista, enderecoValido, linkConexao, lerLink, grupoDe, gruposDe, nomeArq, backupSemPins, finalizacao, arquivoUsuarios, lerUsuarios, novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, separarEmpresas, importarExcel, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
+  const api = { normLogin, loginValido, loginDe, loginsDe, chaveCod, arred, localItem, listaItens, contarItens, aplicarLista, enderecoValido, linkConexao, lerLink, grupoDe, gruposDe, nomeArq, backupSemPins, finalizacao, arquivoUsuarios, lerUsuarios, novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, separarEmpresas, importarExcel, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
   if (typeof module !== 'undefined') module.exports = api; else root.Core = api;
 })(this);
