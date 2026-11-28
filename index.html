@@ -35,6 +35,9 @@ header select{flex:1;min-width:150px;width:0}
 .usu small{display:block;font-weight:400;color:var(--mut)}
 .usu.adm small{color:#005a8c;font-weight:600}
 #aForm{border:1px solid var(--bd);border-radius:14px;padding:0 12px;margin-bottom:10px}
+.novaV{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#ffe9c7;color:#4a2c00;padding:8px 12px;font-weight:600;border-radius:10px;margin:6px}
+.novaV[hidden]{display:none}.novaV button{min-height:40px;white-space:nowrap}
+.versao{margin:8px 0 0;font-size:12px;color:var(--mut);text-align:center}
 #aviso{display:none;background:var(--falta);color:#fff;padding:8px 12px;font-weight:600}
 main{max-width:1000px;margin:0 auto;padding:10px 12px 40px}
 h2{font-size:14px;text-transform:uppercase;color:var(--mut);margin:18px 0 8px}
@@ -129,6 +132,7 @@ button.passo{width:48px;min-height:44px;font-size:22px}
 </head>
 <body>
 <div id="aviso"></div>
+<div class="novaV" id="vNova" role="status" hidden><span>Há uma versão nova do app.</span><button type="button">Atualizar</button></div>
 <header>
   <div class="row">
     <div><span class="quem">Data: <b id="data"></b></span> <span class="quem">Responsável: <b id="resp"></b></span></div>
@@ -174,8 +178,10 @@ button.passo{width:48px;min-height:44px;font-size:22px}
       <label class="ver"><input type="checkbox" id="uVer"> Mostrar senha</label>
     </div>
     <div id="uErro" role="alert"></div>
+    <div class="novaV" id="vNovaLogin" role="status" hidden><span>Há uma versão nova do app.</span><button type="button">Atualizar</button></div>
     <div class="row"><button class="p" type="submit" id="uEntrar">Entrar</button><button type="button" id="uCancelar">Cancelar</button></div>
     <div class="row" id="uEscolha"><button type="button" class="p" id="uServ">Conectar ao Google</button><button type="button" id="uNovo">Criar usuário</button><button type="button" id="uTrazer">Trazer usuários do arquivo</button><button type="button" id="uVoltar">Voltar</button><input type="file" id="uArq" accept=".json" hidden></div>
+    <p class="versao"></p>
   </form>
 </dialog>
 
@@ -270,6 +276,7 @@ button.passo{width:48px;min-height:44px;font-size:22px}
 <button type="button" class="opc" id="mRs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 3-6.200M7 2v4H3M12 8v4l3 2"/></svg><b>Restaurar backup</b><small>Substitui os dados deste aparelho</small></button></div></section>
   </div>
   <p id="mAdmTxt"></p>
+  <p class="versao"></p>
   <input type="file" id="mFile" accept=".json" hidden>
 </dialog>
 

@@ -162,6 +162,8 @@
   $('set').onchange = () => { estado.sel.set = $('set').value; tudo(); salvar(); };
 
   /* Identificação de quem conta (sem senha) e data automática. */
+  /* Número mostrado na tela; deve ser o mesmo do CACHE em sw.js. */
+  const VERSAO = 28;
   const SESSAO = KEY + '-sessao';
   const identificado = () => { try { return sessionStorage.getItem(SESSAO) === hoje() && !!estado.usuario; } catch (e) { return false; } };
   function cabecalho() {
@@ -897,7 +899,20 @@
   tudo(); salvar();
   if (!identificado()) pedirUsuario();
   mostrarPendentes(); enviarFila(); sincronizar().then(sincronizarLista); abrirLink();
+  document.querySelectorAll('.versao').forEach(p => { p.textContent = 'Versão ' + VERSAO; });
+  document.querySelectorAll('.novaV button').forEach(b => { b.onclick = () => location.reload(); });
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch(() => aviso('O modo sem internet não foi ativado. Abra de novo com internet.'));
+    /* Na primeira instalação também há "troca": só avisa quem já usava uma versão. */
+    let jaTinha = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (jaTinha) $('vNova').hidden = $('vNovaLogin').hidden = false;
+      jaTinha = true;
+    });
+    navigator.serviceWorker.register('sw.js').then(r => {
+      /* App deixado aberto: procura versão nova ao voltar para ele e de hora em hora. */
+      const procurar = () => { if (document.visibilityState === 'visible') r.update().catch(() => {}); };
+      document.addEventListener('visibilitychange', procurar);
+      setInterval(procurar, 3600000);
+    }).catch(() => aviso('O modo sem internet não foi ativado. Abra de novo com internet.'));
   }
 })();
