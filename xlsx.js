@@ -36,15 +36,17 @@
     const aba = [...mapa.keys()].filter(n => /^xl\/worksheets\/[^/]+\.xml$/.test(n)).sort()[0];
     if (!aba) throw new Error('Planilha sem abas');
     return tags(await xml(mapa, aba), 'row').map(row => {
-      const lin = [];
+      const lin = [], formulas = [];
       tags(row, 'c').forEach((c, i) => {
         const ref = c.getAttribute('r'), tipo = c.getAttribute('t'), v = tags(c, 'v')[0];
         let val = '';
         if (tipo === 'inlineStr') val = texto(c);
         else if (v) val = tipo === 's' ? textos[+v.textContent] : tipo === 'str' ? v.textContent : Number(v.textContent);
         lin[ref ? coluna(ref) : i] = val;
+        const f = tags(c, 'f')[0];
+        if (f) formulas[ref ? coluna(ref) : i] = f.textContent;
       });
-      return Array.from(lin, x => x === undefined ? '' : x);
+      return Object.assign(Array.from(lin, x => x === undefined ? '' : x), { f: formulas });
     });
   }
   root.lerXlsx = lerXlsx;

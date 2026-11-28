@@ -54,6 +54,7 @@
     if (s.cego && $('filtro').value === 'div') $('filtro').value = '';
     $('filtro').querySelector('[value=div]').disabled = s.cego;
     lista();
+    $('bApto').hidden = !(estado.motel && estado.motel[C.nomeArq(emp().nome)]);
   }
 
   function status() {
@@ -758,7 +759,17 @@
   setInterval(() => { if (lerFila().length && navigator.onLine) enviarFila(); }, 60000);
 
   /* O que a tela de conferência das contagens usa. */
-  window.App = { emp, empresas: () => estado.empresas, chamar, souAdmin, hoje, agora, baixar, avisos, auth: () => estado.pins[estado.admin], infoLista, gravarInfo };
+  window.App = { emp, estado: () => estado, salvar: () => salvar(), identificado, pedirUsuario, usuario: () => estado.usuario, servidor, idAparelho,
+    abrirEmpresa: id => { estado.sel = { emp: id, set: '' }; salvar(); tudo(); salvar(); },
+    podeVerResultado: () => souAdmin() || !estado.admin,
+    enviarPacote: async pacote => {
+      localStorage.setItem(KFILA, JSON.stringify(lerFila().concat(pacote)));
+      mostrarPendentes();
+      let erro = await enviarFila();
+      if (!erro && lerFila().some(x => x.id === pacote.id)) erro = await enviarFila();
+      return erro;
+    },
+    empresas: () => estado.empresas, chamar, souAdmin, hoje, agora, baixar, avisos, auth: () => estado.pins[estado.admin], infoLista, gravarInfo };
 
   /* Menu */
   const fechar = () => $('dMenu').close();

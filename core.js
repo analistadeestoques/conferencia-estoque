@@ -435,8 +435,13 @@
   }
 
   /* Lista de itens para os outros aparelhos: sem saldo, contagem, observação ou usuários. */
-  const listaItens = estado => ({ empresas: estado.empresas.map(e => ({ nome: e.nome,
-    setores: e.setores.map(s => ({ nome: s.nome, itens: s.itens.map(i => ({ cod: i.cod || '', nome: i.nome, un: i.un || '', cat: i.cat || '' })) })) })) });
+  const listaItens = estado => ({ empresas: estado.empresas.map(e => {
+    const r = { nome: e.nome, setores: e.setores.map(s => ({ nome: s.nome, itens: s.itens.map(i => ({ cod: i.cod || '', nome: i.nome, un: i.un || '', cat: i.cat || '' })) })) };
+    /* Motel: o kit por apartamento acompanha a lista; valores e Sismotel não. */
+    const m = estado.motel && estado.motel[nomeArq(e.nome)];
+    if (m) r.motel = { aptos: m.aptos, itens: m.itens.map(i => ({ cod: i.cod, nome: i.nome, grupo: i.grupo, kit: i.kit })) };
+    return r;
+  }) });
   const contarItens = l => l.empresas.reduce((t, e) => t + e.setores.reduce((n, s) => n + s.itens.length, 0), 0);
   /* Devolve um novo estado com os itens da lista. O que já foi contado neste aparelho não se perde. */
   function aplicarLista(estado, lista) {
@@ -482,6 +487,15 @@
     const nomes = new Set(lista.empresas.map(e => norm(e.nome)));
     for (const e of copia.empresas) if (!nomes.has(norm(e.nome)) && e.setores.some(s => Object.values(s.cont).some(v => v.length))) empresas.push(e);
     copia.empresas = empresas;
+    for (const le of lista.empresas) {
+      const m = le.motel;
+      if (!m || !(m.aptos > 0 && m.aptos <= 500) || !Array.isArray(m.itens) || !m.itens.every(nomeado)) continue;
+      copia.motel = copia.motel || {};
+      const k = nomeArq(le.nome), velho = copia.motel[k] || {};
+      const valores = new Map((velho.itens || []).map(i => [i.cod, i.valor]));
+      copia.motel[k] = { aptos: m.aptos, itens: m.itens.map(i => ({ cod: String(i.cod), nome: i.nome, grupo: String(i.grupo || ''), valor: valores.get(String(i.cod)) || 0, kit: i.kit > 0 ? Math.round(i.kit) : 0 })),
+        conf: velho.conf || { data: '', apt: {}, coz: {}, cozQuando: '' }, sismotel: velho.sismotel || {} };
+    }
     return copia;
   }
 
