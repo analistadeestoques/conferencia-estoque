@@ -429,6 +429,57 @@
     };
   }
 
+  /* Lista de itens para os outros aparelhos: sem saldo, contagem, observação ou usuários. */
+  const listaItens = estado => ({ empresas: estado.empresas.map(e => ({ nome: e.nome,
+    setores: e.setores.map(s => ({ nome: s.nome, itens: s.itens.map(i => ({ cod: i.cod || '', nome: i.nome, un: i.un || '', cat: i.cat || '' })) })) })) });
+  const contarItens = l => l.empresas.reduce((t, e) => t + e.setores.reduce((n, s) => n + s.itens.length, 0), 0);
+  /* Devolve um novo estado com os itens da lista. O que já foi contado neste aparelho não se perde. */
+  function aplicarLista(estado, lista) {
+    const nomeado = x => x && typeof x.nome === 'string';
+    if (!(lista && Array.isArray(lista.empresas) && lista.empresas.length && lista.empresas.every(e => nomeado(e) && Array.isArray(e.setores) &&
+      e.setores.every(s => nomeado(s) && Array.isArray(s.itens) && s.itens.every(nomeado))))) throw new Error('Lista de itens inválida.');
+    const copia = JSON.parse(JSON.stringify(estado));
+    const contado = a => !!(a.s.cont[a.it.id] && a.s.cont[a.it.id].length);
+    const levar = (a, destino) => { for (const k of ['cont', 'sys', 'obs']) if (a.s[k][a.it.id] !== undefined) destino[k][a.it.id] = a.s[k][a.it.id]; };
+    const CHAVES = [i => [i.cat, chaveCod(i.cod), norm(i.nome)], i => i.cod && [i.cat, chaveCod(i.cod)], i => [i.cat, norm(i.nome)]];
+    const empresas = lista.empresas.map(le => {
+      const velha = copia.empresas.find(e => norm(e.nome) === norm(le.nome));
+      const atuais = velha ? velha.setores.flatMap(s => s.itens.map(it => ({ s, it, usado: false }))) : [];
+      const pares = le.setores.map(ls => {
+        const v = velha && velha.setores.find(s => norm(s.nome) === norm(ls.nome)), s = novoSetor(ls.nome);
+        if (v) Object.assign(s, { id: v.id, resp: v.resp, data: v.data, cego: v.cego });
+        return { s, itens: ls.itens.map(i => ({ i, a: null })) };
+      });
+      /* Primeiro os pares exatos; depois, código ou nome iguais. */
+      for (const chave of CHAVES) {
+        const mapa = new Map();
+        for (const a of atuais) if (!a.usado) { const k = chave(a.it); if (k) { const t = k.join('|'); if (!mapa.has(t)) mapa.set(t, []); mapa.get(t).push(a); } }
+        for (const p of pares) for (const par of p.itens) if (!par.a) {
+          const k = chave(par.i), a = k && (mapa.get(k.join('|')) || []).find(x => !x.usado);
+          if (a) { a.usado = true; par.a = a; }
+        }
+      }
+      for (const p of pares) for (const { i, a } of p.itens) {
+        const id = a ? a.it.id : novoId();
+        p.s.itens.push({ id, cod: String(i.cod || ''), nome: i.nome, un: String(i.un || ''), cat: String(i.cat || '') });
+        if (a) levar(a, p.s);
+      }
+      const setores = pares.map(p => p.s);
+      for (const a of atuais) if (!a.usado && contado(a)) {
+        let s = setores.find(x => norm(x.nome) === norm(a.s.nome));
+        if (!s) { s = Object.assign(novoSetor(a.s.nome), { id: a.s.id, resp: a.s.resp, data: a.s.data, cego: a.s.cego }); setores.push(s); }
+        s.itens.push(a.it); levar(a, s);
+      }
+      if (!setores.length) setores.push(novoSetor('Geral'));
+      return { id: velha ? velha.id : novoId(), nome: le.nome, setores };
+    });
+    /* Empresa que saiu da lista só fica se tiver contagem. */
+    const nomes = new Set(lista.empresas.map(e => norm(e.nome)));
+    for (const e of copia.empresas) if (!nomes.has(norm(e.nome)) && e.setores.some(s => Object.values(s.cont).some(v => v.length))) empresas.push(e);
+    copia.empresas = empresas;
+    return copia;
+  }
+
   /* Link de conexão (endereço do script + chave, depois do "#"). */
   const enderecoValido = u => /^(https:\/\/script\.google\.com\/.+\/exec|http:\/\/localhost[:/].*)$/.test(u);
   function linkConexao(base, cfg) {
@@ -442,6 +493,6 @@
     } catch (e) { return null; }
   }
 
-  const api = { enderecoValido, linkConexao, lerLink, grupoDe, gruposDe, nomeArq, backupSemPins, finalizacao, arquivoUsuarios, lerUsuarios, novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, separarEmpresas, importarExcel, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
+  const api = { listaItens, contarItens, aplicarLista, enderecoValido, linkConexao, lerLink, grupoDe, gruposDe, nomeArq, backupSemPins, finalizacao, arquivoUsuarios, lerUsuarios, novoSetor, novaEmpresa, estadoInicial, numSistema, numsContagem, importarCadastro, importarSaldo, importarPosicao, reorganizarPorFamilia, separarEmpresas, importarExcel, situacao, resumo, relatorio, csv, backup, lerBackup, apagarDados, fmt, norm, sinal, ROTULO };
   if (typeof module !== 'undefined') module.exports = api; else root.Core = api;
 })(this);

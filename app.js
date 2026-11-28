@@ -5,7 +5,7 @@
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
   const aviso = t => { $('aviso').textContent = t; $('aviso').style.display = t ? 'block' : 'none'; };
 
-  let estado, bloqueado = false;
+  let estado, bloqueado = false, esperaLista = 0, agendarLista = () => {};
   try {
     const bruto = localStorage.getItem(KEY);
     estado = bruto ? C.lerBackup(bruto) : C.estadoInicial();
@@ -18,6 +18,7 @@
     if (bloqueado) return;
     try { localStorage.setItem(KEY, JSON.stringify(estado)); }
     catch (e) { aviso('ATENÇÃO: o tablet não conseguiu salvar. Baixe um backup agora (Opções).'); }
+    agendarLista();
   }
   function converter() {
     const antes = JSON.stringify(estado);
@@ -304,6 +305,7 @@
     $('mServ').hidden = !!estado.admin && !souAdmin();
     $('mServ').textContent = servidor() ? '✔ Conectado ao Google' : 'Conectar ao Google';
     $('mLink').hidden = !souAdmin();
+    $('mLista').hidden = !souAdmin() || !servidor();
     $('mUsuarios').hidden = !souAdmin();
     $('mAdmTxt').textContent = estado.admin ? 'Administrador: ' + estado.admin : 'Este aparelho ainda não tem administrador.';
   }
@@ -542,6 +544,67 @@
     alert(erro ? 'Ainda pendente. ' + erro.message : 'Pendentes enviados.');
   };
 
+  /* Lista de itens: o aparelho que a enviou pelo botão é a origem; os outros recebem. */
+  const KLISTA = KEY + '-lista';
+  const infoLista = () => { try { return JSON.parse(localStorage.getItem(KLISTA)) || {}; } catch (e) { return {}; } };
+  function gravarInfo(mais) {
+    try { localStorage.setItem(KLISTA, JSON.stringify(Object.assign(infoLista(), mais))); } catch (e) { /* baixa de novo depois */ }
+  }
+  function idAparelho() {
+    let id = infoLista().aparelho;
+    if (!id) { id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); gravarInfo({ aparelho: id }); }
+    return id;
+  }
+  const podeEnviar = () => !!servidor() && !bloqueado && !!estado.admin && estado.usuario === estado.admin && identificado();
+  async function enviarLista(auto) {
+    const lista = C.listaItens(estado), texto = JSON.stringify(lista);
+    const r = await chamar('salvarLista', { auth: estado.pins[estado.admin], aparelho: idAparelho(), auto, lista });
+    gravarInfo(r.assumida ? { origem: true, versao: r.versao, enviado: texto } : { origem: false });
+    return r;
+  }
+  /* Digitação ainda não somada: não mexe na tela agora. */
+  const digitando = () => [...document.querySelectorAll('.it .valor')].some(i => i.value.trim());
+  let sincLista = null;
+  function sincronizarLista() {
+    if (!sincLista) sincLista = (async () => {
+      const cfg = servidor();
+      if (!cfg || bloqueado) return;
+      const info = infoLista(), mesmo = info.url === cfg.url;
+      const r = await chamar('lista', { versao: mesmo ? info.versao : '' });
+      gravarInfo({ url: cfg.url });
+      if (!r.versao) return;
+      if (r.origem === idAparelho()) {
+        gravarInfo({ origem: true });
+        if (podeEnviar() && infoLista().enviado !== JSON.stringify(C.listaItens(estado))) await enviarLista(true);
+        return;
+      }
+      gravarInfo({ origem: false });
+      if (!r.lista || digitando()) return;
+      estado = C.aplicarLista(estado, r.lista);
+      gravarInfo({ versao: r.versao });
+      salvar(); tudo(); salvar();
+    })().catch(() => { /* sem internet ou script antigo: tenta de novo depois */ }).finally(() => { sincLista = null; });
+    return sincLista;
+  }
+  agendarLista = () => {
+    clearTimeout(esperaLista);
+    esperaLista = setTimeout(() => {
+      const info = infoLista();
+      if (info.origem && podeEnviar() && info.enviado !== JSON.stringify(C.listaItens(estado))) enviarLista(true).catch(() => {});
+    }, 3000);
+  };
+  $('mLista').onclick = async () => {
+    if (!souAdmin() || !servidor()) return;
+    $('dMenu').close();
+    const n = C.contarItens(C.listaItens(estado));
+    if (!n) return alert('Este aparelho não tem itens para enviar.');
+    if (!confirm('Enviar a lista deste aparelho (' + n + ' itens, sem saldo)? Ela passa a valer para todos os aparelhos.')) return;
+    try {
+      await enviarLista(false);
+      alert('Lista enviada. Os outros aparelhos recebem ao abrir o app com internet. As próximas mudanças feitas aqui vão sozinhas.');
+    } catch (e) { alert('Não foi possível enviar a lista. ' + e.message); }
+  };
+
   /* Conexão com o Google */
   function abrirServidor() {
     const c = servidor();
@@ -562,6 +625,7 @@
     aplicarUsuarios(r);
     $('dServ').close();
     if ($('dUser').open) { montarNomes(); mostrar('ja'); } else if (!identificado()) pedirUsuario();
+    await sincronizarLista();
     alert(souAdmin() ? 'Aparelho conectado. Para ligar os outros: Opções → Enviar link de conexão.' : 'Aparelho conectado.');
     enviarFila();
     return true;
@@ -609,8 +673,8 @@
   };
   $('uServ').onclick = abrirServidor;
   $('mServ').onclick = () => { $('dMenu').close(); abrirServidor(); };
-  window.addEventListener('online', () => { enviarFila(); sincronizar(); });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { enviarFila(); sincronizar(); } });
+  window.addEventListener('online', () => { enviarFila(); sincronizar().then(sincronizarLista); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { enviarFila(); sincronizar().then(sincronizarLista); } });
   setInterval(() => { if (lerFila().length && navigator.onLine) enviarFila(); }, 60000);
 
   /* Opções */
@@ -661,7 +725,7 @@
 
   tudo(); salvar();
   if (!identificado()) pedirUsuario();
-  mostrarPendentes(); enviarFila(); sincronizar(); abrirLink();
+  mostrarPendentes(); enviarFila(); sincronizar().then(sincronizarLista); abrirLink();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(() => aviso('O modo sem internet não foi ativado. Abra de novo com internet.'));
   }
