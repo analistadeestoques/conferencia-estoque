@@ -234,7 +234,8 @@
     $('uVoltar').hidden = !m;
     $('uTrazer').hidden = !vazio;
     $('uLista').hidden = m !== 'ja';
-    $('uTexto').textContent = m === 'novo' ? 'Digite o seu nome e crie um PIN.' : 'Toque no seu nome e digite o PIN.';
+    $('uTexto').textContent = m !== 'novo' ? 'Toque no seu nome e digite o PIN.'
+      : 'Digite o seu nome e crie um PIN.' + (servidor() ? '' : ' Este aparelho ainda não está conectado ao Google: peça o link de conexão ao administrador.');
     /* Quem usou o aparelho por último já vem preenchido. */
     if (m === 'ja' && ultimo()) $('uNome').value = ultimo();
     ajustarPin();
@@ -353,11 +354,16 @@
     $('aTitulo').textContent = nome ? 'Alterando: ' + nome + ' (deixe o PIN vazio para manter o atual)' : 'Novo usuário';
     $('aNome').value = nome; $('aPin').value = ''; $('aMsg').textContent = '';
   }
+  const abrirForm = nome => { editar(nome); $('aForm').hidden = false; $('aForm').scrollIntoView({ block: 'nearest' }); (nome ? $('aPin') : $('aNome')).focus(); };
+  const fecharForm = () => { editar(''); $('aForm').hidden = true; };
   function listaUsuarios() {
-    $('aLista').replaceChildren(...(estado.usuarios || []).map(n => {
-      const d = el('div', 'usu'), ed = el('button', '', 'Alterar nome / PIN');
-      ed.type = 'button'; ed.onclick = () => { editar(n); $('aNome').focus(); };
-      d.append(el('span', '', n + (n === estado.admin ? ' (administrador)' : '')), ed);
+    const ordem = (estado.usuarios || []).slice().sort((x, y) => (y === estado.admin) - (x === estado.admin) || x.localeCompare(y, 'pt-BR'));
+    $('aLista').replaceChildren(...ordem.map(n => {
+      const adm = n === estado.admin, d = el('div', adm ? 'usu adm' : 'usu'), ed = el('button', '', 'Alterar nome / PIN');
+      ed.type = 'button'; ed.onclick = () => abrirForm(n);
+      const quem = el('span', '', n);
+      quem.append(el('small', '', (adm ? 'Administrador · acessa tudo' : 'Usuário · só faz contagem') + (temPin(n) ? '' : ' · ainda sem PIN')));
+      d.append(quem, ed);
       if (n !== estado.admin) {
         const x = el('button', 'x', 'Excluir'); x.type = 'button';
         x.onclick = async () => {
@@ -368,7 +374,7 @@
           }
           estado.usuarios = estado.usuarios.filter(u => u !== n);
           delete (estado.pins || {})[n]; delete (estado.sais || {})[n];
-          salvar(); listaUsuarios(); editar('');
+          salvar(); listaUsuarios(); fecharForm();
         };
         d.append(x);
       }
@@ -404,17 +410,27 @@
       for (const e of estado.empresas) for (const s of e.setores) if (s.resp) s.resp = s.resp.split(', ').map(n => n === antigo ? novo : n).join(', ');
     }
     if (pin) estado.pins[novo] = await resumoPin(novo, pin);
-    salvar(); cabecalho(); listaUsuarios(); editar('');
-    erro('Salvo.');
+    salvar(); cabecalho(); listaUsuarios(); fecharForm();
+    erro(antigo ? 'Salvo.' : 'Salvo. “' + novo + '” entra como usuário normal, em “Já tenho usuário”.');
   }
-  $('mUsuarios').onclick = () => { if (!souAdmin()) return; $('dMenu').close(); listaUsuarios(); editar(''); $('dAdm').showModal(); };
+  /* Abre mostrando o que já tem e busca no Google quem se cadastrou em outro aparelho. */
+  async function atualizarUsuarios() {
+    const diz = t => { $('aEstado').textContent = t; };
+    if (!servidor()) return diz('Lista só deste aparelho. Conecte ao Google para ver os cadastros dos outros.');
+    diz('Buscando a lista no Google…');
+    try { aplicarUsuarios(await chamar('usuarios')); } catch (e) { return diz('Sem conexão: esta é a última lista salva neste aparelho.'); }
+    listaUsuarios();
+    diz('Lista do Google, a mesma para todos os aparelhos conectados.');
+  }
+  $('mUsuarios').onclick = () => { if (!souAdmin()) return; $('dMenu').close(); listaUsuarios(); fecharForm(); $('dAdm').showModal(); atualizarUsuarios(); };
   $('aForm').onsubmit = e => { e.preventDefault(); salvarUsuario(); };
   $('aExportar').onclick = () => {
     if (!souAdmin()) return;
     baixar('usuarios_conferencia_' + hoje() + '.json', C.arquivoUsuarios(estado), 'application/json');
     $('aMsg').textContent = 'Arquivo salvo em Downloads.';
   };
-  $('aNovo').onclick = () => { editar(''); $('aNome').focus(); };
+  $('aNovo').onclick = () => abrirForm('');
+  $('aCancelar').onclick = fecharForm;
   $('aCodigo').onclick = () => { if (souAdmin() && confirm('Gerar um novo código? O anterior deixa de valer.')) novoCodigo(); };
   $('uCancelar').onclick = () => $('dUser').close();
   $('dUser').addEventListener('cancel', e => { if (!identificado()) e.preventDefault(); });
@@ -666,7 +682,14 @@
       if (!estado.admin) throw new Error('O servidor ainda está vazio. Conecte primeiro o aparelho do administrador (Menu → Definir-me como administrador).');
       if (!confirm('Enviar os usuários deste aparelho para o Google? “' + estado.admin + '” será o administrador de todos.')) return false;
       r = await chamar('iniciar', { usuarios: estado.usuarios, pins: estado.pins, sais: estado.sais, admin: estado.admin, recuperacao: estado.recuperacao }, cfg);
-    } else if (!semUsuarios() && !confirm('Os usuários deste aparelho serão substituídos pelos do Google. Continuar?')) return false;
+    } else if (!semUsuarios()) {
+      /* Quem se cadastrou aqui antes de o aparelho ter Google não pode perder o acesso. */
+      const soAqui = servidor() ? [] : estado.usuarios.filter(n => temPin(n) && !r.usuarios.some(u => C.norm(u) === C.norm(n)) &&
+        (!estado.sais || !estado.sais[n] || estado.sais[n] === C.norm(n)));
+      if (!confirm(soAqui.length ? 'Cadastrados só neste aparelho: ' + soAqui.join(', ') + '. Serão enviados ao Google como usuários normais, e a lista do Google passa a valer. Continuar?'
+        : 'Os usuários deste aparelho serão substituídos pelos do Google. Continuar?')) return false;
+      for (const n of soAqui) r = await chamar('cadastrar', { nome: n, hash: estado.pins[n] }, cfg);
+    }
     localStorage.setItem(KSERV, JSON.stringify(cfg));
     aplicarUsuarios(r);
     $('dServ').close();

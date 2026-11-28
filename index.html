@@ -27,8 +27,12 @@ header select{flex:1;min-width:150px;width:0}
 .nomes{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 #uNome,.pin{width:100%;margin-bottom:8px}
 #uErro,#aMsg,#sMsg,#fMsg{color:var(--falta);font-weight:600}
-.usu{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)}
-.usu span{flex:1;min-width:140px;font-weight:600}
+.usu{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--bd)}
+.usu:last-child{border-bottom:0}
+.usu span{flex:1;min-width:160px;font-weight:600;overflow-wrap:anywhere}
+.usu small{display:block;font-weight:400;color:var(--mut)}
+.usu.adm small{color:#005a8c;font-weight:600}
+#aForm{border:1px solid var(--bd);border-radius:14px;padding:0 12px;margin-bottom:10px}
 #aviso{display:none;background:var(--falta);color:#fff;padding:8px 12px;font-weight:600}
 main{max-width:1000px;margin:0 auto;padding:10px 12px 40px}
 h2{font-size:14px;text-transform:uppercase;color:var(--mut);margin:18px 0 8px}
@@ -148,15 +152,18 @@ button.opc.x b{color:#a34700}
 </dialog>
 
 <dialog id="dAdm">
-  <h3>Cadastro de usuários</h3>
-  <div id="aLista"></div>
-  <form id="aForm">
+  <h3>Usuários</h3>
+  <p id="aEstado"></p>
+  <div class="cartao" id="aLista"></div>
+  <div class="row"><button type="button" class="p" id="aNovo">+ Adicionar usuário</button></div>
+  <div id="aMsg" role="alert"></div>
+  <form id="aForm" hidden>
     <p id="aTitulo"></p>
     <input id="aNome" class="pin" placeholder="Nome e sobrenome" autocomplete="off" maxlength="60">
     <input id="aPin" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="PIN de 4 números">
-    <div id="aMsg" role="alert"></div>
-    <div class="row"><button class="p" type="submit">Salvar</button><button type="button" id="aNovo">Novo usuário</button><button type="button" id="aCodigo">Novo código de recuperação</button><button type="button" id="aExportar">Salvar arquivo de usuários</button><button type="button" data-fechar>Fechar</button></div>
+    <div class="row"><button class="p" type="submit">Salvar</button><button type="button" id="aCancelar">Cancelar</button></div>
   </form>
+  <div class="row"><button type="button" id="aCodigo">Novo código de recuperação</button><button type="button" id="aExportar">Salvar arquivo de usuários</button><button type="button" data-fechar>Fechar</button></div>
 </dialog>
 
 <dialog id="dServ">
@@ -225,7 +232,7 @@ button.opc.x b{color:#a34700}
 <section class="grupo" id="gAp"><h4>Aparelhos e usuários</h4><div class="cartao"><button type="button" class="opc" id="mSouAdm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6zM9 12l2 2 4-4"/></svg><b>Definir-me como administrador</b><small>Libera o cadastro de usuários</small></button>
 <button type="button" class="opc" id="mLink"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></svg><b>Enviar link de conexão</b><small>Para ligar outro celular ou tablet</small></button>
 <button type="button" class="opc" id="mLista"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></svg><b>Enviar lista de itens</b><small>Os aparelhos recebem sem o saldo</small></button>
-<button type="button" class="opc" id="mUsuarios"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21c0-4 3-7 7-7s7 3 7 7M17 4a4 4 0 0 1 0 7M18 14c3 1 4 3 4 7"/></svg><b>Cadastro de usuários</b><small>Criar usuários e trocar PIN</small></button>
+<button type="button" class="opc" id="mUsuarios"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21c0-4 3-7 7-7s7 3 7 7M17 4a4 4 0 0 1 0 7M18 14c3 1 4 3 4 7"/></svg><b>Usuários</b><small>Ver quem tem acesso, adicionar e trocar PIN</small></button>
 <button type="button" class="opc" id="mServ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 19h11a4 4 0 0 0 0-8 6 6 0 0 0-12-1 4.500 4.500 0 0 0 1 9z"/></svg><b>Conectar ao Google</b><small>Endereço e chave do script</small></button></div></section>
 <section class="grupo" id="gSeg"><h4>Segurança dos dados</h4><div class="cartao"><button type="button" class="opc" id="mBk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h13l3 3v13H4zM8 4v5h7V4M8 20v-6h8v6"/></svg><b>Baixar backup</b><small>Guarde o arquivo fora do aparelho</small></button>
 <button type="button" class="opc" id="mRs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 3-6.200M7 2v4H3M12 8v4l3 2"/></svg><b>Restaurar backup</b><small>Substitui os dados deste aparelho</small></button></div></section>
